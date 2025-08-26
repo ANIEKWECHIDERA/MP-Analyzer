@@ -26,17 +26,15 @@ numeric_columns = [
 # Clean and convert columns to numeric
 for col in numeric_columns:
     if col in df.columns:
-        # Remove non-numeric characters (e.g., commas, currency symbols)
         df[col] = df[col].astype(str).str.replace(r'[^\d.]', '', regex=True)
-        # Convert to numeric, coercing errors to NaN
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
 # Find the row where the "ZONES" column is "Ikoyi 1 Total"
-zones = df[df["ZONES"] == "Ikoyi 1 Total"]
+zones = df[df["ZONES"].str.strip().str.upper() == "IKOYI 1 TOTAL"]
 
 if not zones.empty:
     # Extract scalar values for the specific row
-    row = zones.iloc[0]  # Get the first matching row
+    row = zones.iloc[0]
 
     # PBT data
     PBT_achieved = row["PBT 2025 YTD  ACHVD"]
@@ -73,7 +71,7 @@ if not zones.empty:
     DP_may = row["DP May-25"]
     DP_jun = row["DP Jun-25"]
     DP_jul = row["DP Jul-25"]
-    DP_budget = row["DP 2025 FULL YR BGT"] 
+    DP_budget = row["DP 2025 FULL YR BGT"]
     DP_perc_achieved = (DP_jul / DP_budget * 100) if DP_budget != 0 else 0
     DP_variance = row["DP YTD Variance"]
     
@@ -81,7 +79,7 @@ if not zones.empty:
     TRA_may = row["TRA May-25"]
     TRA_jun = row["TRA Jun-25"]
     TRA_jul = row["TRA Jul-25"]
-    TRA_loan_to_deposit_ratio = row["TRA Loan to Dep"]
+    TRA_loan_to_deposit_ratio =( row["TRA Loan to Dep"] or 0) * 100
     TRA_variance = row["TRA YTD Variance"]
     
     # AB data
@@ -130,101 +128,120 @@ if not zones.empty:
     doc = DocxTemplate(r"C:\Users\chide\Downloads\mpatemplate.docx")
 
     # 3. Define context (placeholders in Word)
+    def format_billions(value):
+        if pd.isna(value):
+            return "0B"
+        if abs(value) < 1_000:  # less than 1B
+            return f"{value:,.0f}M"
+        billions = value / 1_000
+        if billions.is_integer():
+            return f"{int(billions)}B"
+        return f"{billions:.1f}B".rstrip('0').rstrip('.')
+
+    def format_millions(value):
+        if pd.isna(value):
+            return "0M"
+        if value >= 1_000:
+            billions = value / 1_000
+            return f"{billions:.1f}M".rstrip('0').rstrip('.')
+        millions = value / 1
+        return f"{millions:.1f}M".rstrip('0').rstrip('.')
+
     context = {
-        "title": "Ikoyi 1",
+        "title": "Ikoyi 1 Total",
         
-        # PBT Data
-        "PBT_value1": f"{PBT_achieved:,.0f}",  # Total achieved
-        "PBT_value2": f"{PBT_budget:,.2f}",    # Total budget
-        "PBT_value3": f"{PBT_perc_budget:,.0f}",  # % on budget
-        "PBT_value4": f"{PBT_variance:,.0f}",  # Total variance
-        "PBT_value5": f"{PBT_run_rate:,.0f}",  # Average run rate
+        # PBT Data (in billions except percentage)
+        "PBT_value1": format_billions(PBT_achieved),  # Total achieved
+        "PBT_value2": format_billions(PBT_budget),    # Total budget
+        "PBT_value3": f"{PBT_perc_budget:,.0f}" if pd.notna(PBT_perc_budget) else "0",  # % on budget
+        "PBT_value4": format_billions(PBT_variance),  # Total variance
+        "PBT_value5": format_billions(PBT_run_rate),  # Average run rate
         "PBT_summary": "Insert PBT Summary Here",
         
-        # DDA Data
-        "DDA_value1": f"{DDA_may:,.0f}",  # DDA May-25 value
-        "DDA_value2": f"{DDA_jun:,.0f}",  # DDA Jun-25 value
-        "DDA_value3": f"{DDA_jul:,.0f}",  # DDA Jul-25 value
-        "DDA_value4": f"{DDA_perc_achieved:,.0f}",  # % achieved
-        "DDA_value5": f"{DDA_variance:,.0f}",  # YTD variance
+        # DDA Data (in billions except percentage)
+        "DDA_value1": format_billions(DDA_may),  # DDA May-25 value
+        "DDA_value2": format_billions(DDA_jun),  # DDA Jun-25 value
+        "DDA_value3": format_billions(DDA_jul),  # DDA Jul-25 value
+        "DDA_value4": f"{DDA_perc_achieved:,.0f}" if pd.notna(DDA_perc_achieved) else "0",  # % achieved
+        "DDA_value5": format_billions(DDA_variance),  # YTD variance
         "DDA_summary": "Insert DDA Summary Here",
 
-        # SAVINGS Data
-        "SAV_value1": f"{SAV_may:,.0f}",  # SAV May-25 value
-        "SAV_value2": f"{SAV_jun:,.0f}",  # SAV Jun-25 value
-        "SAV_value3": f"{SAV_jul:,.0f}",  # SAV Jul-25 value
-        "SAV_value4": f"{SAV_perc_achieved:,.0f}",  # % achieved
-        "SAV_value5": f"{SAV_variance:,.0f}",  # YTD variance
+        # SAVINGS Data (in billions except percentage)
+        "SAV_value1": format_billions(SAV_may),  # SAV May-25 value
+        "SAV_value2": format_billions(SAV_jun),  # SAV Jun-25 value
+        "SAV_value3": format_billions(SAV_jul),  # SAV Jul-25 value
+        "SAV_value4": f"{SAV_perc_achieved:,.0f}" if pd.notna(SAV_perc_achieved) else "0",  # % achieved
+        "SAV_value5": format_billions(SAV_variance),  # YTD variance
         "SAV_summary": "Insert SAV Summary Here",
 
-        # FD Data
-        "FD_value1": f"{FD_may:,.0f}",  # FD May-25 value
-        "FD_value2": f"{FD_jun:,.0f}",  # FD Jun-25 value
-        "FD_value3": f"{FD_jul:,.0f}",  # FD Jul-25 value
-        "FD_value4": f"{FD_perc_achieved:,.0f}",  # % achieved
-        "FD_value5": f"{FD_variance:,.0f}",  # YTD variance
+        # FD Data (in billions except percentage)
+        "FD_value1": format_billions(FD_may),  # FD May-25 value
+        "FD_value2": format_billions(FD_jun),  # FD Jun-25 value
+        "FD_value3": format_billions(FD_jul),  # FD Jul-25 value
+        "FD_value4": f"{FD_perc_achieved:,.0f}" if pd.notna(FD_perc_achieved) else "0",  # % achieved
+        "FD_value5": format_billions(FD_variance),  # YTD variance
         "FD_summary": "Insert FD Summary Here",
 
-        # DP Data
-        "DP_value1": f"{DP_may:,.0f}",  # DP May-25 value
-        "DP_value2": f"{DP_jun:,.0f}",  # DP Jun-25 value
-        "DP_value3": f"{DP_jul:,.0f}",  # DP Jul-25 value
-        "DP_value4": f"{DP_perc_achieved:,.0f}",  # % achieved
-        "DP_value5": f"{DP_variance:,.0f}",  # YTD variance
+        # DP Data (in millions except percentage)
+        "DP_value1": format_millions(DP_may),  # DP May-25 value
+        "DP_value2": format_millions(DP_jun),  # DP Jun-25 value
+        "DP_value3": format_millions(DP_jul),  # DP Jul-25 value
+        "DP_value4": f"{DP_perc_achieved:,.0f}" if pd.notna(DP_perc_achieved) else "0",  # % achieved
+        "DP_value5": format_millions(DP_variance),  # YTD variance
         "DP_summary": "Insert DP Summary Here",
 
-        # TRA Data
-        "TRA_value1": f"{TRA_may:,.0f}",  # TRA May-25 value
-        "TRA_value2": f"{TRA_jun:,.0f}",  # TRA Jun-25 value
-        "TRA_value3": f"{TRA_jul:,.0f}",  # TRA Jul-25 value
-        "TRA_value4": f"{TRA_loan_to_deposit_ratio:,.0f}",  # Loan to Deposit Ratio %
-        "TRA_value5": f"{TRA_variance:,.0f}",  # YTD variance
+        # TRA Data (in billions except percentage)
+        "TRA_value1": format_billions(TRA_may),  # TRA May-25 value
+        "TRA_value2": format_billions(TRA_jun),  # TRA Jun-25 value
+        "TRA_value3": format_billions(TRA_jul),  # TRA Jul-25 value
+        "TRA_value4": f"{TRA_loan_to_deposit_ratio:,.0f}" if pd.notna(TRA_loan_to_deposit_ratio) else "0",  # Loan to Deposit Ratio %
+        "TRA_value5": format_billions(TRA_variance),  # YTD variance
         "TRA_summary": "Insert TRA Summary Here",
 
-        # AB Data
-        "AB_value1": f"{AB_jun:,.0f}",  # AB Jun-25 value
-        "AB_value2": f"{AB_jul:,.0f}",  # AB Jul-25 value
-        "AB_value3": f"{AB_var:,.0f}",  # AB Variance
-        # "AB_summary": "Insert AB Summary Here",
+        # AB Data (in millions)
+        "AB_value1": format_millions(AB_jun),  # AB Jun-25 value
+        "AB_value2": format_millions(AB_jul),  # AB Jul-25 value
+        "AB_value3": format_millions(AB_var),  # AB Variance
+        "AB_summary": "Insert AB Summary Here",
 
-        # AO Data
-        "AO_value1": f"{AO_CA_funded:,.0f}",  # Funded CA accounts opened
-        "AO_value2": f"{AO_SA_funded:,.0f}",  # Funded SA accounts opened
-        "AO_value3": f"{AO_CA_unfunded:,.0f}",  # Unfunded CA accounts opened
-        "AO_value4": f"{AO_SA_unfunded:,.0f}",  # Unfunded SA accounts opened
-        "AO_value5": f"{AO_CA_total:,.0f}",  # Total CA accounts opened
-        "AO_value6": f"{AO_SA_total:,.0f}",  # Total SA accounts opened
+        # AO Data (no conversion, integers)
+        "AO_value1": f"{AO_CA_funded:,.0f}" if pd.notna(AO_CA_funded) else "0",  # Funded CA accounts opened
+        "AO_value2": f"{AO_SA_funded:,.0f}" if pd.notna(AO_SA_funded) else "0",  # Funded SA accounts opened
+        "AO_value3": f"{AO_CA_unfunded:,.0f}" if pd.notna(AO_CA_unfunded) else "0",  # Unfunded CA accounts opened
+        "AO_value4": f"{AO_SA_unfunded:,.0f}" if pd.notna(AO_SA_unfunded) else "0",  # Unfunded SA accounts opened
+        "AO_value5": f"{AO_CA_total:,.0f}" if pd.notna(AO_CA_total) else "0",  # Total CA accounts opened
+        "AO_value6": f"{AO_SA_total:,.0f}" if pd.notna(AO_SA_total) else "0",  # Total SA accounts opened
 
-        # CDS Data
-        "CDS_value1": f"{CDS_active:,.0f}",  # Active CDS accounts
-        "CDS_value2": f"{CDS_inactive:,.0f}",  # Inactive CDS accounts
-        "CDS_value3": f"{CDS_total:,.0f}",  # Total CDS accounts
+        # CDS Data (no conversion, integers)
+        "CDS_value1": f"{CDS_active:,.0f}" if pd.notna(CDS_active) else "0",  # Active CDS accounts
+        "CDS_value2": f"{CDS_inactive:,.0f}" if pd.notna(CDS_inactive) else "0",  # Inactive CDS accounts
+        "CDS_value3": f"{CDS_total:,.0f}" if pd.notna(CDS_total) else "0",  # Total CDS accounts
         "CDS_summary": "Insert CDS Summary Here",
 
-        # CE Data
-        "CE_value1": f"{CE_may:,.0f}",  # CE May-25 value
-        "CE_value2": f"{CE_jun:,.0f}",  # CE Jun-25 value
-        "CE_value3": f"{CE_jul:,.0f}",  # CE Jul-25 value
-        "CE_value4": f"{CE_total:,.0f}",  # Total CE value
+        # CE Data (no conversion, integers)
+        "CE_value1": f"{CE_may:,.0f}" if pd.notna(CE_may) else "0",  # CE May-25 value
+        "CE_value2": f"{CE_jun:,.0f}" if pd.notna(CE_jun) else "0",  # CE Jun-25 value
+        "CE_value3": f"{CE_jul:,.0f}" if pd.notna(CE_jul) else "0",  # CE Jul-25 value
+        "CE_value4": f"{CE_total:,.0f}" if pd.notna(CE_total) else "0",  # Total CE value
 
-        # AOB Data
-        "AOB_value1": f"{AOB_may:,.0f}",  # AOB May-25 value
-        "AOB_value2": f"{AOB_jun:,.0f}",  # AOB Jun-25 value
-        "AOB_value3": f"{AOB_jul:,.0f}",  # AOB Jul-25 value
-        "AOB_value4": f"{AOB_total:,.0f}",  # Total AOB value
+        # AOB Data (no conversion, integers)
+        "AOB_value1": f"{AOB_may:,.0f}" if pd.notna(AOB_may) else "0",  # AOB May-25 value
+        "AOB_value2": f"{AOB_jun:,.0f}" if pd.notna(AOB_jun) else "0",  # AOB Jun-25 value
+        "AOB_value3": f"{AOB_jul:,.0f}" if pd.notna(AOB_jul) else "0",  # AOB Jul-25 value
+        "AOB_value4": f"{AOB_total:,.0f}" if pd.notna(AOB_total) else "0",  # Total AOB value
 
-        # POS Data
-        "POS_value1": f"{POS_active:,.0f}",  # Active POS systems
-        "POS_value2": f"{POS_inactive:,.0f}",  # Inactive POS systems
-        "POS_value3": f"{POS_deployed:,.0f}",  # Deployed POS systems
-        "POS_value4": f"{POS_retrieved:,.0f}",  # Retrieved POS systems
+        # POS Data (no conversion, integers)
+        "POS_value1": f"{POS_active:,.0f}" if pd.notna(POS_active) else "0",  # Active POS systems
+        "POS_value2": f"{POS_inactive:,.0f}" if pd.notna(POS_inactive) else "0",  # Inactive POS systems
+        "POS_value3": f"{POS_deployed:,.0f}" if pd.notna(POS_deployed) else "0",  # Deployed POS systems
+        "POS_value4": f"{POS_retrieved:,.0f}" if pd.notna(POS_retrieved) else "0",  # Retrieved POS systems
         "POS_summary": "Insert POS Summary Here",
 
-        # NXP Data
-        "NXP_value1": f"{NXP_may:,.0f}",  # NXP May-25 value
-        "NXP_value2": f"{NXP_jun:,.0f}",  # NXP Jun-25 value
-        "NXP_value3": f"{NXP_jul:,.0f}",  # NXP Jul-25 value
-        "NXP_value4": f"{NXP_variance:,.0f}",  # Year-over-year variance
+        # NXP Data (in millions)
+        "NXP_value1": format_millions(NXP_may),  # NXP May-25 value
+        "NXP_value2": format_millions(NXP_jun),  # NXP Jun-25 value
+        "NXP_value3": format_millions(NXP_jul),  # NXP Jul-25 value
+        "NXP_value4": format_millions(NXP_variance),  # Year-over-year variance
     }
 
     # 4. Render and save
