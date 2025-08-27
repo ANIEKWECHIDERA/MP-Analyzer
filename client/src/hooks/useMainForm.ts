@@ -88,6 +88,8 @@ export const useMainForm = (): MainFormState & MainFormActions => {
         icon: "success",
         title: "Success!",
         text: "File processed and downloaded successfully.",
+        background: "##0b4f4a",
+        confirmButtonColor: "#0b4f4a",
       });
 
       // Reset form
@@ -102,6 +104,7 @@ export const useMainForm = (): MainFormState & MainFormActions => {
         icon: "success",
         title: "File Processed",
         text: "Your report has been downloaded successfully!",
+        confirmButtonColor: "#0b4f4a",
       });
     } catch (error: any) {
       // console.error("Upload error:", error);
@@ -146,8 +149,8 @@ export const useMainForm = (): MainFormState & MainFormActions => {
       }
 
       // Reset form state on error
-      setFile(null);
-      setZoneName("");
+      // setFile(null);
+      // setZoneName("");
       const fileInput = document.getElementById(
         "file-input"
       ) as HTMLInputElement | null;
@@ -157,6 +160,7 @@ export const useMainForm = (): MainFormState & MainFormActions => {
         icon: "error",
         title: errorTitle,
         text: errorMessage,
+        confirmButtonColor: "#0b4f4a",
       });
     } finally {
       setIsLoading(false);

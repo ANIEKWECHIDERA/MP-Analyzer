@@ -38,13 +38,13 @@ const MainPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="flex justify-center items-center space-x-2">
-              <FileInput />
+            <div className="flex justify-center items-center space-x-2 border-1 rounded-md bg-gray-50 p-4 ">
+              <FileInput className="mr-4" />
               <input
                 type="file"
                 onChange={handleFileChange}
                 disabled={isLoading}
-                className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none"
+                className="block w-full file:mr-4 file:py-2 file:px-4 file:rounded-md file:text-sm file:font-medium file:bg-gray-300 hover:file:bg-gray-400 text-sm text-gray-950 hover:file:text-gray-50 border-gray-300 rounded-lg cursor-pointer focus:outline-none file:transition-all file:duration-150 file:ease-in-out"
                 title="Upload Excel or CSV file"
               />
             </div>

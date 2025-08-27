@@ -9,7 +9,12 @@ import type { SubmitButtonProps } from "@/types/types";
  */
 const SubmitButton: React.FC<SubmitButtonProps> = ({ isLoading, disabled }) => {
   return (
-    <Button type="submit" className="w-full" disabled={disabled}>
+    <Button
+      type="submit"
+      className="w-full bg-teal-950 hover:bg-teal-900"
+      disabled={disabled}
+      title="Upload and process the file"
+    >
       <AnimatePresence mode="wait">
         {isLoading ? (
           <motion.div
