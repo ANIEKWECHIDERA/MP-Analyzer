@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import ZoneInput from "@/components/ZoneInput";
 import { useMainForm } from "@/hooks/useMainForm";
-import { FileSpreadsheet } from "lucide-react";
+import { FileInput, FileSpreadsheet } from "lucide-react";
 
 /**
  * Main page component that renders the file upload form.
@@ -38,13 +38,16 @@ const MainPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <input
-              type="file"
-              onChange={handleFileChange}
-              disabled={isLoading}
-              className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none"
-              title="Upload Excel or CSV file"
-            />
+            <div className="flex justify-center items-center space-x-2">
+              <FileInput />
+              <input
+                type="file"
+                onChange={handleFileChange}
+                disabled={isLoading}
+                className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none"
+                title="Upload Excel or CSV file"
+              />
+            </div>
             <ZoneInput
               value={zoneName}
               onChange={handleZoneChange}
