@@ -33,7 +33,7 @@ const MainPage: React.FC = () => {
             File Upload & Processing
           </CardTitle>
           <CardDescription>
-            Upload your Excel or CSV file and specify the zone name
+            Upload MPR Excel file and specify the zone name
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -44,7 +44,7 @@ const MainPage: React.FC = () => {
                 type="file"
                 onChange={handleFileChange}
                 disabled={isLoading}
-                className="block w-full file:mr-4 file:py-2 file:px-4 file:rounded-md file:text-sm file:font-medium file:bg-gray-300 hover:file:bg-gray-400 text-sm text-gray-950 hover:file:text-gray-50 border-gray-300 rounded-lg cursor-pointer focus:outline-none file:transition-all file:duration-150 file:ease-in-out"
+                className="block w-full file:mr-4 file:py-2 file:px-4 file:rounded-md file:text-sm file:font-medium file:bg-teal-800/25 hover:file:bg-teal-900/50 text-sm file:text-teal-950 hover:file:text-gray-50 border-gray-300 rounded-lg cursor-pointer focus:outline-none file:transition-all file:duration-150 file:ease-in-out"
                 title="Upload Excel or CSV file"
               />
             </div>

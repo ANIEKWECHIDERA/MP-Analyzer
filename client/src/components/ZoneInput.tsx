@@ -8,7 +8,7 @@ import type { ZoneInputProps } from "@/types/types";
  */
 const ZoneInput: React.FC<ZoneInputProps> = ({ value, onChange, disabled }) => {
   return (
-    <div className="space-y-2">
+    <div className="">
       <Label htmlFor="zone-name">Zone Name</Label>
       <Input
         id="zone-name"
@@ -17,6 +17,7 @@ const ZoneInput: React.FC<ZoneInputProps> = ({ value, onChange, disabled }) => {
         value={value}
         onChange={onChange}
         disabled={disabled}
+        className="mt-2"
       />
     </div>
   );
