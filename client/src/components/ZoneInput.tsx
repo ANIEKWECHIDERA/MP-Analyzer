@@ -9,7 +9,9 @@ import type { ZoneInputProps } from "@/types/types";
 const ZoneInput: React.FC<ZoneInputProps> = ({ value, onChange, disabled }) => {
   return (
     <div className="">
-      <Label htmlFor="zone-name">Zone Name</Label>
+      <Label className="" htmlFor="zone-name">
+        Zone Name
+      </Label>
       <Input
         id="zone-name"
         type="text"
@@ -17,7 +19,7 @@ const ZoneInput: React.FC<ZoneInputProps> = ({ value, onChange, disabled }) => {
         value={value}
         onChange={onChange}
         disabled={disabled}
-        className="mt-2"
+        className="mt-2 checked:bg-amber-400"
       />
     </div>
   );
