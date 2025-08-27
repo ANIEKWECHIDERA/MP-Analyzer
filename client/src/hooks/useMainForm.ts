@@ -3,6 +3,8 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import type { MainFormState, MainFormActions } from "../types/types";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 // Custom hook for managing form state and submission logic
 export const useMainForm = (): MainFormState & MainFormActions => {
   const [file, setFile] = useState<File | null>(null);
@@ -57,13 +59,13 @@ export const useMainForm = (): MainFormState & MainFormActions => {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("zoneName", zoneName.trim());
+      formData.append("zone_name", zoneName.trim());
+      // console.log("FormData contents:");
+      // for (let [key, value] of formData.entries()) {
+      //   console.log(key, value);
+      // }
 
-      // API endpoint (configure for non-Next.js backend if needed, e.g., 'http://localhost:5000/api/process-file')
-      const response = await axios.post("/api/process-file", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+      const response = await axios.post(API_URL, formData, {
         responseType: "blob", // For file download
       });
 
@@ -75,7 +77,7 @@ export const useMainForm = (): MainFormState & MainFormActions => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `processed_${zoneName}_${file.name}`;
+      link.download = `processed_${zoneName}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -89,18 +91,72 @@ export const useMainForm = (): MainFormState & MainFormActions => {
       });
 
       // Reset form
+      // setFile(null);
+      // setZoneName("");
+      const fileInput = document.getElementById(
+        "file-input"
+      ) as HTMLInputElement | null;
+      if (fileInput) fileInput.value = "";
+
+      Swal.fire({
+        icon: "success",
+        title: "File Processed",
+        text: "Your report has been downloaded successfully!",
+      });
+    } catch (error: any) {
+      // console.error("Upload error:", error);
+      // console.error("Error message:", error.message);
+      // console.error("Error code:", error.code);
+      if (error.response) {
+        // console.log("Response status:", error.response.status);
+        // console.log("Response headers:", error.response.headers);
+        // Log response body if it's a blob
+        if (error.response.data instanceof Blob) {
+          const reader = new FileReader();
+          // reader.onload = () => console.log("Response body:", reader.result);
+          reader.readAsText(error.response.data);
+        }
+      }
+
+      let errorMessage =
+        "There was an error processing your file. Please try again.";
+      let errorTitle = "Upload Failed";
+      if (error.response) {
+        if (error.response.status === 404) {
+          errorTitle = "Zone Not Found";
+          errorMessage = `No data found for zone '${zoneName}'. Please check the zone name or try another zone.`;
+        } else if (error.response.status === 400) {
+          errorMessage =
+            "Invalid file type. Please upload an Excel (.xlsx, .xls) or CSV file.";
+        } else if (error.response.status === 500) {
+          errorMessage =
+            "Server error. The template file may be missing or there was an issue processing the data.";
+        } else if (error.response.status === 422) {
+          errorMessage =
+            "Invalid request. Please ensure the file and zone name are correctly specified.";
+        } else {
+          errorMessage = `Unexpected error (status ${error.response.status}). Please try again or contact support.`;
+        }
+      } else if (error.code === "ERR_NETWORK") {
+        errorMessage =
+          "Network error. Ensure the backend server is running and the URL is correct.";
+      } else if (error.message.includes("Unexpected file type")) {
+        errorMessage =
+          "The server returned an unexpected file type. Expected a Word document (.docx).";
+      }
+
+      // Reset form state on error
       setFile(null);
       setZoneName("");
       const fileInput = document.getElementById(
         "file-input"
-      ) as HTMLInputElement;
+      ) as HTMLInputElement | null;
       if (fileInput) fileInput.value = "";
-    } catch (error) {
-      console.error("Upload error:", error);
+
       Swal.fire({
         icon: "error",
-        title: "Upload Failed",
-        text: "There was an error processing your file. Please try again.",
+        title: errorTitle,
+        text: errorMessage,
       });
     } finally {
       setIsLoading(false);
