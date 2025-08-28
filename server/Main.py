@@ -84,7 +84,7 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
     template_path = os.path.join(os.path.dirname(__file__), "mpatemplate.docx")
     logger.info(f"Checking for template at: {template_path}")
     
-    main_file_path = os.path.join(os.path.dirname(__file__), "mpastructure.xlsx")
+    main_file_path = os.path.join(os.path.dirname(__file__), "mpaStructure.xlsx")
     logger.info(f"Checking for structure template at: {main_file_path}")
     
     # Check if template exists
