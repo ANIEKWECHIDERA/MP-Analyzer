@@ -57,6 +57,13 @@ def cleanup_files(input_path: str, output_path: str):
         os.unlink(output_path)
         logger.info(f"Deleted temporary output file: {output_path}")
 
+@app.get("/ping")
+async def ping():
+    logger.info("Ping received")
+    return {"status": "ok"}
+
+
+
 @app.post("/generate-report/")
 async def generate_report(file: UploadFile = File(...), zone_name: str = Form(...), background_tasks: BackgroundTasks = BackgroundTasks()):
     logger.info(f"Received request for zone_name: '{zone_name}', file: '{file.filename}', size: {file.size} bytes")
