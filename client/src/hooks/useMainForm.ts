@@ -31,6 +31,7 @@ export const useMainForm = (): MainFormState & MainFormActions => {
           icon: "error",
           title: "Invalid File Type",
           text: "Please select a valid Excel (.xlsx) or CSV (.csv) file.",
+          confirmButtonColor: "#0b4f4a",
         });
       }
     }
@@ -50,6 +51,7 @@ export const useMainForm = (): MainFormState & MainFormActions => {
         icon: "warning",
         title: "Missing Information",
         text: "Please select a file and enter a zone name.",
+        confirmButtonColor: "#0b4f4a",
       });
       return;
     }

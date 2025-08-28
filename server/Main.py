@@ -62,8 +62,6 @@ async def ping():
     logger.info("Ping received")
     return {"status": "ok"}
 
-
-
 @app.post("/generate-report/")
 async def generate_report(file: UploadFile = File(...), zone_name: str = Form(...), background_tasks: BackgroundTasks = BackgroundTasks()):
     logger.info(f"Received request for zone_name: '{zone_name}', file: '{file.filename}', size: {file.size} bytes")
@@ -86,18 +84,53 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
     template_path = os.path.join(os.path.dirname(__file__), "mpatemplate.docx")
     logger.info(f"Checking for template at: {template_path}")
     
+    main_file_path = os.path.join(os.path.dirname(__file__), "mpastructure.xlsx")
+    logger.info(f"Checking for structure template at: {main_file_path}")
+    
     # Check if template exists
     if not os.path.exists(template_path):
         logger.error(f"Template file not found at: {template_path}")
         os.unlink(temp_file_path)
         raise HTTPException(status_code=500, detail="Template file not found.")
     
-    try:
-        # Load data
-        logger.info(f"Reading Excel file: {temp_file_path}")
-        df = pd.read_excel(temp_file_path)
-        # logger.info(f"Excel file loaded. Columns: {list(df.columns)}")
+    # Check if structure template exists
+    if not os.path.exists(main_file_path):
+        logger.error(f"Structure template file not found at: {main_file_path}")
+        os.unlink(temp_file_path)
+        raise HTTPException(status_code=500, detail="Structure template file not found.")
     
+    try:
+        # # Load data
+        # logger.info(f"Reading Excel file: {temp_file_path}")
+        # if file.filename.endswith('.csv'):
+        #     df = pd.read_csv(temp_file_path)
+        # else:
+        #     df = pd.read_excel(temp_file_path)
+        # # logger.info(f"Excel file loaded. Columns: {list(df.columns)}")
+        
+        # Load structure template columns
+        logger.info(f"Loading structure template columns from: {main_file_path}")
+        df_template = pd.read_excel(main_file_path, nrows=0)  # Load only headers
+        structure_columns = df_template.columns.tolist()
+        # logger.info(f"Structure columns loaded: {structure_columns}")
+
+        # Load uploaded file data, skipping the header row
+        logger.info(f"Reading uploaded file data (minus headers): {temp_file_path}")
+        if file.filename.endswith('.csv'):
+            df_uploaded = pd.read_csv(temp_file_path, skiprows=1, header=None)
+        else:
+            df_uploaded = pd.read_excel(temp_file_path, skiprows=1, header=None)
+        # logger.info(f"Uploaded data shape: {df_uploaded.shape}")
+
+        # Assign structure columns to uploaded data
+        logger.info("Assigning structure columns to uploaded data")
+        if len(structure_columns) != df_uploaded.shape[1]:
+            logger.error(f"Column mismatch: Structure has {len(structure_columns)} columns, uploaded data has {df_uploaded.shape[1]} columns")
+            raise HTTPException(status_code=400, detail="Column count mismatch between uploaded file and structure template.")
+
+        df = pd.DataFrame(data=df_uploaded.values, columns=structure_columns)
+        # logger.info(f"Structured DataFrame created. Columns: {list(df.columns)}")
+        
         # Clean and convert columns to numeric
         logger.info("Converting columns to numeric")
         for col in numeric_columns:
@@ -160,7 +193,7 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         DP_jun = row["DP Jun-25"]
         DP_jul = row["DP Jul-25"]
         DP_budget = row["DP 2025 FULL YR BGT"]
-        DP_perc_achieved = (DP_jul / DP_budget * 100) if DDA_budget != 0 else 0
+        DP_perc_achieved = (DP_jul / DP_budget * 100) if DP_budget != 0 else 0
         DP_variance = row["DP YTD Variance"]
         logger.debug(f"DP data: May={DP_may}, Jun={DP_jun}, Jul={DP_jul}")
 
