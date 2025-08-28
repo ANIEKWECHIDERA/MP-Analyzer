@@ -117,9 +117,9 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         # Load uploaded file data, skipping the header row
         logger.info(f"Reading uploaded file data (minus headers): {temp_file_path}")
         if file.filename.endswith('.csv'):
-            df_uploaded = pd.read_csv(temp_file_path, skiprows=1, header=None)
+            df_uploaded = pd.read_csv(temp_file_path, skiprows=5, header=None)
         else:
-            df_uploaded = pd.read_excel(temp_file_path, skiprows=1, header=None)
+            df_uploaded = pd.read_excel(temp_file_path, skiprows=5, header=None)
         # logger.info(f"Uploaded data shape: {df_uploaded.shape}")
 
         # Assign structure columns to uploaded data

@@ -109,50 +109,64 @@ export const useMainForm = (): MainFormState & MainFormActions => {
         confirmButtonColor: "#0b4f4a",
       });
     } catch (error: any) {
-      // console.error("Upload error:", error);
-      // console.error("Error message:", error.message);
-      // console.error("Error code:", error.code);
-      if (error.response) {
-        // console.log("Response status:", error.response.status);
-        // console.log("Response headers:", error.response.headers);
-        // Log response body if it's a blob
-        if (error.response.data instanceof Blob) {
-          const reader = new FileReader();
-          // reader.onload = () => console.log("Response body:", reader.result);
-          reader.readAsText(error.response.data);
-        }
-      }
-
       let errorMessage =
         "There was an error processing your file. Please try again.";
       let errorTitle = "Upload Failed";
+
       if (error.response) {
-        if (error.response.status === 404) {
-          errorTitle = "Zone Not Found";
-          errorMessage = `No data found for zone '${zoneName}'. Please check the zone name or try another zone.`;
-        } else if (error.response.status === 400) {
-          errorMessage =
-            "Invalid file type. Please upload an Excel (.xlsx, .xls) or CSV file.";
-        } else if (error.response.status === 500) {
-          errorMessage =
-            "Server error. The template file may be missing or there was an issue processing the data.";
-        } else if (error.response.status === 422) {
-          errorMessage =
-            "Invalid request. Please ensure the file and zone name are correctly specified.";
-        } else {
-          errorMessage = `Unexpected error (status ${error.response.status}). Please try again or contact support.`;
+        // If the error response data is a Blob, read and parse it
+        if (error.response.data instanceof Blob) {
+          try {
+            const text = await error.response.data.text(); // Blob to text
+            const json = JSON.parse(text); // parse JSON
+
+            if (json.detail) {
+              errorMessage = json.detail;
+            }
+          } catch {
+            errorMessage = "Failed to parse error details from the server.";
+          }
+        } else if (error.response.data && error.response.data.detail) {
+          // If already parsed JSON (unlikely with responseType blob)
+          errorMessage = error.response.data.detail;
+        }
+
+        // Set errorTitle & other messages based on status code
+        switch (error.response.status) {
+          case 404:
+            errorTitle = "Zone Not Found";
+            errorMessage = `No data found for zone '${zoneName}'. Please check the zone name or try another zone.`;
+            break;
+          case 400:
+            errorTitle = "Upload Failed";
+            // errorMessage is already set from parsed detail or default
+            break;
+          case 500:
+            errorTitle = "Server Error";
+            errorMessage =
+              "The template file may be missing or there was an issue processing the data.";
+            break;
+          case 422:
+            errorTitle = "Invalid Request";
+            errorMessage =
+              "Please ensure the file and zone name are correctly specified.";
+            break;
+          default:
+            errorTitle = `Error ${error.response.status}`;
+            errorMessage = `Unexpected error occurred. Please try again or contact support.`;
+            break;
         }
       } else if (error.code === "ERR_NETWORK") {
+        errorTitle = "Network Error";
         errorMessage =
-          "Network error. Ensure the backend server is running and the URL is correct.";
+          "Ensure the backend server is running and the URL is correct.";
       } else if (error.message.includes("Unexpected file type")) {
+        errorTitle = "File Type Error";
         errorMessage =
           "The server returned an unexpected file type. Expected a Word document (.docx).";
       }
 
-      // Reset form state on error
-      // setFile(null);
-      // setZoneName("");
+      // Reset file input (optional)
       const fileInput = document.getElementById(
         "file-input"
       ) as HTMLInputElement | null;
