@@ -36,7 +36,7 @@ const SubmitButton: React.FC<SubmitButtonProps> = ({ isLoading, disabled }) => {
             className="flex items-center gap-2"
           >
             <Upload className="h-4 w-4" />
-            Upload & Process
+            Generate Report
           </motion.div>
         )}
       </AnimatePresence>
