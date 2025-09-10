@@ -8,6 +8,7 @@ import tempfile
 import shutil
 import re
 import logging
+from decimal import Decimal, ROUND_DOWN
 
 # Configure logging
 logging.basicConfig(
@@ -262,21 +263,47 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         def format_billions(value):
             if pd.isna(value):
                 return "0B"
+            
+            value = Decimal(value)
+            
             if abs(value) < 1_000:  # less than 1B
                 return f"{value:,.0f}M"
+            
             billions = value / 1_000
-            if billions.is_integer():
+            
+            billions = billions.quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+            
+            if billions % 1 == 0:
                 return f"{int(billions)}B"
-            return f"{billions:.1f}B".rstrip('0').rstrip('.')
+            
+            return f"{billions:.2f}B".rstrip('0').rstrip('.')
 
         def format_millions(value):
             if pd.isna(value):
                 return "0M"
+            
+            value = Decimal(value)
+            
             if value >= 1_000:
                 billions = value / 1_000
-                return f"{billions:.1f}M".rstrip('0').rstrip('.')
-            millions = value / 1
-            return f"{millions:.1f}M".rstrip('0').rstrip('.')
+                
+                billions = billions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+                
+                return f"{billions:.2f}B".rstrip('0').rstrip('.')
+            
+            elif value <= 1_000 and value >= 1:
+                millions = value / 1
+                
+                millions = millions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+                
+                return f"{millions:.2f}M".rstrip('0').rstrip('.')
+            
+            thousands = value * 100
+            
+            thousands = thousands.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+            
+            return f"{thousands:.2f}K".rstrip('0').rstrip('.')
+            
 
         # Prepare zone_name for context
         title = re.sub(r'\s*total\s*$', '', zone_name, flags=re.IGNORECASE).strip().upper()
