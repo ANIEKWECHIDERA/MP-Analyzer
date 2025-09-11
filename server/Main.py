@@ -289,7 +289,7 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
                 
                 billions = billions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
                 
-                return f"{billions:.2f}B".rstrip('0').rstrip('.')
+                return f"{billions:.2f}M".rstrip('0').rstrip('.')
             
             elif value <= 1_000 and value >= 1:
                 millions = value / 1
