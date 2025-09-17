@@ -45,8 +45,54 @@ numeric_columns = [
     "CE May-25", "CE Jun-25", "CE Jul-25",
     "AOB May-25", "AOB Jun-25", "AOB Jul-25",
     "POS ACTIVE", "POS INACTIVE", "POS NEWLY DEPLOYED", "POS RETRIEVED",
-    "NXP May-25", "NXP Jun-25", "NXP Jul-25", "NXP YOY VAR"
+    "NXP May-25", "NXP Jun-25", "NXP Jul-25", "NXP YOY VAR",
+    "PBT Mthly Var", "DDA MOM Variance", "SAV MOM Variance", "FD MOM Variance"
 ]
+
+# Formatting functions
+def format_billions(value):
+    if pd.isna(value):
+        return "0B"
+    
+    value = Decimal(value)
+    
+    if abs(value) < 1_000:  # less than 1B
+        return f"{value:,.0f}M"
+    
+    billions = value / 1_000
+    
+    billions = billions.quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+    
+    if billions % 1 == 0:
+        return f"{int(billions)}B"
+    
+    return f"{billions:.2f}B".rstrip('0').rstrip('.')
+
+def format_millions(value):
+    if pd.isna(value):
+        return "0M"
+    
+    value = Decimal(value)
+    
+    if value >= 1_000:
+        billions = value / 1_000
+        
+        billions = billions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+        
+        return f"{billions:.2f}M".rstrip('0').rstrip('.')
+    
+    elif value <= 1_000 and value >= 1:
+        millions = value / 1
+        
+        millions = millions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+        
+        return f"{millions:.2f}M".rstrip('0').rstrip('.')
+    
+    thousands = value * 100
+    
+    thousands = thousands.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+    
+    return f"{thousands:.2f}K".rstrip('0').rstrip('.')
 
 def cleanup_files(input_path: str, output_path: str):
     """Clean up temporary files in the background."""
@@ -57,6 +103,120 @@ def cleanup_files(input_path: str, output_path: str):
     if os.path.exists(output_path):
         os.unlink(output_path)
         logger.info(f"Deleted temporary output file: {output_path}")
+
+def process_data(input_zone, df):
+    # Remove the ' total' suffix from the user input to extract zone name
+    zone_name = input_zone.replace(" total", "").strip()
+
+    # Filter the dataframe for the selected zone, excluding the "zone total" row
+    zone_data = df[
+        (df['ZONES'].str.contains(zone_name, case=False, na=False)) & 
+        (~df['ZONES'].str.strip().str.lower().eq(f"{zone_name.lower()} total"))
+    ]
+    
+    # Sorting the data to get the highest and lowest values
+    pbt_sorted = zone_data.sort_values(by='PBT 2025 YTD  ACHVD', ascending=False)
+    dda_sorted = zone_data.sort_values(by='DDA Jul-25', ascending=False)
+    sav_sorted = zone_data.sort_values(by='SAV Jul-25', ascending=False)
+    fd_sorted = zone_data.sort_values(by='FD Jul-25', ascending=False)
+    dp_sorted = zone_data.sort_values(by='DP Jul-25', ascending=False)
+
+    # Get the highest and lowest branches for each category
+    highest_pbt = pbt_sorted.iloc[0]
+    lowest_pbt = pbt_sorted.iloc[-1]
+    
+    highest_dda = dda_sorted.iloc[0]
+    lowest_dda = dda_sorted.iloc[-1]
+    
+    highest_sav = sav_sorted.iloc[0]
+    lowest_sav = sav_sorted.iloc[-1]
+    
+    highest_fd = fd_sorted.iloc[0]
+    lowest_fd = fd_sorted.iloc[-1]
+    
+    highest_dp = dp_sorted.iloc[0]
+    lowest_dp = dp_sorted.iloc[-1]
+    
+    # Function to convert variance with parentheses to negative value
+    def get_variance(variance):
+        if isinstance(variance, str) and variance.startswith('-'):
+            return -float(variance[1:-1])  # Convert (xxx) to -xxx
+        return float(variance)
+
+    # Monthly variances for each category
+    pbt_high_var = get_variance(highest_pbt['PBT Mthly Var'])
+    pbt_low_var = get_variance(lowest_pbt['PBT Mthly Var'])
+    
+    dda_high_var = get_variance(highest_dda['DDA MOM Variance'])
+    dda_low_var = get_variance(lowest_dda['DDA MOM Variance'])
+    
+    sav_high_var = get_variance(highest_sav['SAV MOM Variance'])
+    sav_low_var = get_variance(lowest_sav['SAV MOM Variance'])
+    
+    fd_high_var = get_variance(highest_fd['FD MOM Variance'])
+    fd_low_var = get_variance(lowest_fd['FD MOM Variance'])
+
+    # Calculate total for each category
+    total_pbt = zone_data['PBT 2025 YTD  ACHVD'].sum()
+    total_dda = zone_data['DDA Jul-25'].sum()
+    total_sav = zone_data['SAV Jul-25'].sum()
+    total_fd = zone_data['FD Jul-25'].sum()
+    total_dp = zone_data['DP Jul-25'].sum()
+
+    # Calculate percentage contribution for each category
+    pbt_high_perc = (highest_pbt['PBT 2025 YTD  ACHVD'] / total_pbt) * 100 if total_pbt != 0 else 0
+    pbt_low_perc = (lowest_pbt['PBT 2025 YTD  ACHVD'] / total_pbt) * 100 if total_pbt != 0 else 0
+    
+    dda_high_perc = (highest_dda['DDA Jul-25'] / total_dda) * 100 if total_dda != 0 else 0
+    dda_low_perc = (lowest_dda['DDA Jul-25'] / total_dda) * 100 if total_dda != 0 else 0
+    
+    sav_high_perc = (highest_sav['SAV Jul-25'] / total_sav) * 100 if total_sav != 0 else 0
+    sav_low_perc = (lowest_sav['SAV Jul-25'] / total_sav) * 100 if total_sav != 0 else 0
+    
+    fd_high_perc = (highest_fd['FD Jul-25'] / total_fd) * 100 if total_fd != 0 else 0
+    fd_low_perc = (lowest_fd['FD Jul-25'] / total_fd) * 100 if total_fd != 0 else 0
+    
+    dp_high_perc = (highest_dp['DP Jul-25'] / total_dp) * 100 if total_dp != 0 else 0
+    dp_low_perc = (lowest_dp['DP Jul-25'] / total_dp) * 100 if total_dp != 0 else 0
+
+    # Prepare the dictionary to output placeholders for the template
+    output = {
+        'PBT_branch_high': highest_pbt['BRANCHES'],
+        'PBT_branch_low': lowest_pbt['BRANCHES'],
+        'PBT_branch_high_var': f"{pbt_high_var:,.2f}",
+        'PBT_branch_low_var': f"{pbt_low_var:,.2f}",
+        'PBT_branch_high_perc': f"{pbt_high_perc:,.0f}",
+        'PBT_branch_low_perc': f"{pbt_low_perc:,.0f}",
+
+        'DDA_branch_high': highest_dda['BRANCHES'],
+        'DDA_branch_low': lowest_dda['BRANCHES'],
+        'DDA_branch_high_var': f"{dda_high_var:,.2f}",
+        'DDA_branch_low_var': f"{dda_low_var:,.2f}",
+        'DDA_branch_high_perc': f"{dda_high_perc:,.0f}",
+        'DDA_branch_low_perc': f"{dda_low_perc:,.0f}",
+
+        'SAV_branch_high': highest_sav['BRANCHES'],
+        'SAV_branch_low': lowest_sav['BRANCHES'],
+        'SAV_branch_high_var': f"{sav_high_var:,.2f}",
+        'SAV_branch_low_var': f"{sav_low_var:,.2f}",
+        'SAV_branch_high_perc': f"{sav_high_perc:,.0f}",
+        'SAV_branch_low_perc': f"{sav_low_perc:,.0f}",
+
+        'FD_branch_high': highest_fd['BRANCHES'],
+        'FD_branch_low': lowest_fd['BRANCHES'],
+        'FD_branch_high_var': f"{fd_high_var:,.2f}",
+        'FD_branch_low_var': f"{fd_low_var:,.2f}",
+        'FD_branch_high_perc': f"{fd_high_perc:,.0f}",
+        'FD_branch_low_perc': f"{fd_low_perc:,.0f}",
+
+        'DP_branch_high': highest_dp['BRANCHES'],
+        'DP_branch_low': lowest_dp['BRANCHES'],
+        'DP_branch_high_perc': f"{dp_high_perc:,.0f}",
+        'DP_branch_low_perc': f"{dp_low_perc:,.0f}",
+    }
+    
+    return output
+
 
 @app.get("/ping")
 async def ping():
@@ -101,19 +261,10 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         raise HTTPException(status_code=500, detail="Structure template file not found.")
     
     try:
-        # # Load data
-        # logger.info(f"Reading Excel file: {temp_file_path}")
-        # if file.filename.endswith('.csv'):
-        #     df = pd.read_csv(temp_file_path)
-        # else:
-        #     df = pd.read_excel(temp_file_path)
-        # # logger.info(f"Excel file loaded. Columns: {list(df.columns)}")
-        
         # Load structure template columns
         logger.info(f"Loading structure template columns from: {main_file_path}")
         df_template = pd.read_excel(main_file_path, nrows=0)  # Load only headers
         structure_columns = df_template.columns.tolist()
-        # logger.info(f"Structure columns loaded: {structure_columns}")
 
         # Load uploaded file data, skipping the header row
         logger.info(f"Reading uploaded file data (minus headers): {temp_file_path}")
@@ -121,7 +272,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             df_uploaded = pd.read_csv(temp_file_path, skiprows=5, header=None)
         else:
             df_uploaded = pd.read_excel(temp_file_path, skiprows=5, header=None)
-        # logger.info(f"Uploaded data shape: {df_uploaded.shape}")
 
         # Assign structure columns to uploaded data
         logger.info("Assigning structure columns to uploaded data")
@@ -130,7 +280,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             raise HTTPException(status_code=400, detail="Column count mismatch between uploaded file and structure template.")
 
         df = pd.DataFrame(data=df_uploaded.values, columns=structure_columns)
-        # logger.info(f"Structured DataFrame created. Columns: {list(df.columns)}")
         
         # Clean and convert columns to numeric
         logger.info("Converting columns to numeric")
@@ -154,13 +303,16 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         row = zones.iloc[0]
         logger.info("Extracting data from row")
 
+        # Process additional data for branches
+        branch_data = process_data(zone_name, df)
+        logger.info("Branch data processed")
+
         # PBT data
         PBT_achieved = row["PBT 2025 YTD  ACHVD"]
         PBT_budget = row["PBT 2025 FULL YR BGT"]
         PBT_perc_budget = (PBT_achieved / PBT_budget * 100) if PBT_budget != 0 else 0
         PBT_variance = row["PBT 2025 YOY VAR"]
         PBT_run_rate = row["PBT Exp Run Rate"]
-        logger.debug(f"PBT data: achieved={PBT_achieved}, budget={PBT_budget}, %={PBT_perc_budget}")
 
         # DDA data
         DDA_may = row["DDA May-25"]
@@ -169,7 +321,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         DDA_budget = row["DDA 2025 FULL YR BGT"]
         DDA_perc_achieved = (DDA_jul / DDA_budget * 100) if DDA_budget != 0 else 0
         DDA_variance = row["DDA YTD Variance"]
-        logger.debug(f"DDA data: May={DDA_may}, Jun={DDA_jun}, Jul={DDA_jul}")
 
         # SAV data
         SAV_may = row["SAV May-25"]
@@ -178,7 +329,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         SAV_budget = row["SAV 2025 FULL YR BGT"]
         SAV_perc_achieved = (SAV_jul / SAV_budget * 100) if SAV_budget != 0 else 0
         SAV_variance = row["SAV YTD Variance"]
-        logger.debug(f"SAV data: May={SAV_may}, Jun={SAV_jun}, Jul={SAV_jul}")
 
         # FD data
         FD_may = row["FD May-25"]
@@ -187,7 +337,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         FD_budget = row["FD 2025 FULL YR BGT"]
         FD_perc_achieved = (FD_jul / FD_budget * 100) if FD_budget != 0 else 0
         FD_variance = row["FD YTD Variance"]
-        logger.debug(f"FD data: May={FD_may}, Jun={FD_jun}, Jul={FD_jul}")
 
         # DP data
         DP_may = row["DP May-25"]
@@ -196,7 +345,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         DP_budget = row["DP 2025 FULL YR BGT"]
         DP_perc_achieved = (DP_jul / DP_budget * 100) if DP_budget != 0 else 0
         DP_variance = row["DP YTD Variance"]
-        logger.debug(f"DP data: May={DP_may}, Jun={DP_jun}, Jul={DP_jul}")
 
         # TRA data
         TRA_may = row["TRA May-25"]
@@ -204,13 +352,11 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         TRA_jul = row["TRA Jul-25"]
         TRA_loan_to_deposit_ratio = (row["TRA Loan to Dep"] or 0) * 100
         TRA_variance = row["TRA YTD Variance"]
-        logger.debug(f"TRA data: May={TRA_may}, Jun={TRA_jun}, Jul={TRA_jul}")
 
         # AB data
         AB_jun = row["AB Jun-25"]
         AB_jul = row["AB Jul-25"]
         AB_var = row["AB VAR"]
-        logger.debug(f"AB data: Jun={AB_jun}, Jul={AB_jul}")
 
         # AO data
         AO_CA_funded = row["AO C/A Opened - Funded"]
@@ -219,91 +365,39 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         AO_SA_funded = row["AO S/A Opened - Funded"]
         AO_SA_unfunded = row["AO S/A Opened - Unfunded"]
         AO_SA_total = row["AO S/A Opened - Total"]
-        logger.debug(f"AO data: CA_funded={AO_CA_funded}, SA_funded={AO_SA_funded}")
 
         # CDS data
         CDS_active = row["CDS1 ACTIVE"] + row["CDS2 ACTIVE"]
         CDS_inactive = row["CDS1 INACTIVE"] + row["CDS2 INACTIVE"]
         CDS_total = row["CDS1 No. of Cards Issued"] + row["CDS2 No. of Cards Issued"]
-        logger.debug(f"CDS data: active={CDS_active}, inactive={CDS_inactive}")
 
         # CE data
         CE_may = row["CE May-25"]
         CE_jun = row["CE Jun-25"]
         CE_jul = row["CE Jul-25"]
         CE_total = CE_may + CE_jun + CE_jul
-        logger.debug(f"CE data: May={CE_may}, Jun={CE_jun}, Jul={CE_jul}")
 
         # AOB data
         AOB_may = row["AOB May-25"]
         AOB_jun = row["AOB Jun-25"]
         AOB_jul = row["AOB Jul-25"]
         AOB_total = AOB_may + AOB_jun + AOB_jul
-        logger.debug(f"AOB data: May={AOB_may}, Jun={AOB_jun}, Jul={AOB_jul}")
 
         # POS data
         POS_active = row["POS ACTIVE"]
         POS_inactive = row["POS INACTIVE"]
         POS_deployed = row["POS NEWLY DEPLOYED"]
         POS_retrieved = row["POS RETRIEVED"]
-        logger.debug(f"POS data: active={POS_active}, deployed={POS_deployed}")
 
         # NXP data
         NXP_may = row["NXP May-25"]
         NXP_jun = row["NXP Jun-25"]
         NXP_jul = row["NXP Jul-25"]
         NXP_variance = row["NXP YOY VAR"]
-        logger.debug(f"NXP data: May={NXP_may}, Jun={NXP_jun}, Jul={NXP_jul}")
 
         # Load Word template
         logger.info(f"Loading Word template: {template_path}")
         doc = DocxTemplate(template_path)
-
-        # Formatting functions
-        def format_billions(value):
-            if pd.isna(value):
-                return "0B"
-            
-            value = Decimal(value)
-            
-            if abs(value) < 1_000:  # less than 1B
-                return f"{value:,.0f}M"
-            
-            billions = value / 1_000
-            
-            billions = billions.quantize(Decimal('0.01'), rounding=ROUND_DOWN)
-            
-            if billions % 1 == 0:
-                return f"{int(billions)}B"
-            
-            return f"{billions:.2f}B".rstrip('0').rstrip('.')
-
-        def format_millions(value):
-            if pd.isna(value):
-                return "0M"
-            
-            value = Decimal(value)
-            
-            if value >= 1_000:
-                billions = value / 1_000
-                
-                billions = billions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
-                
-                return f"{billions:.2f}M".rstrip('0').rstrip('.')
-            
-            elif value <= 1_000 and value >= 1:
-                millions = value / 1
-                
-                millions = millions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
-                
-                return f"{millions:.2f}M".rstrip('0').rstrip('.')
-            
-            thousands = value * 100
-            
-            thousands = thousands.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
-            
-            return f"{thousands:.2f}K".rstrip('0').rstrip('.')
-            
 
         # Prepare zone_name for context
         title = re.sub(r'\s*total\s*$', '', zone_name, flags=re.IGNORECASE).strip().upper()
@@ -379,6 +473,7 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             "NXP_value2": format_millions(NXP_jun),
             "NXP_value3": format_millions(NXP_jul),
             "NXP_value4": format_millions(NXP_variance),
+            **branch_data
         }
         logger.info("Context prepared for template rendering")
 
@@ -406,12 +501,10 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             filename=f"{title.replace(' ', '_')}_Report.docx",
         )
     except HTTPException as http_exc:
-        # Propagate HTTP exceptions (e.g., 404) without converting to 500
         logger.error(f"HTTP error: {http_exc.status_code} - {http_exc.detail}")
         cleanup_files(temp_file_path, temp_output_path)
         raise http_exc
     except Exception as e:
-        # Handle other unexpected errors as 500
         logger.error(f"Unexpected error processing request: {str(e)}")
         cleanup_files(temp_file_path, temp_output_path)
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
