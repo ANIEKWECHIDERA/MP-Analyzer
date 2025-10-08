@@ -106,7 +106,7 @@ def cleanup_files(input_path: str, output_path: str):
 
 def process_data(input_zone, df):
     # Remove the ' total' suffix from the user input to extract zone name
-    zone_name = input_zone.replace(" total", "").strip()
+    zone_name = re.sub(r'\s*total\s*$', '', input_zone, flags=re.IGNORECASE).strip()
 
     # Filter the dataframe for the selected zone, excluding the "zone total" row
     zone_data = df[
