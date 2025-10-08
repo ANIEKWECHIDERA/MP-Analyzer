@@ -75,24 +75,60 @@ def format_millions(value):
     value = Decimal(value)
     
     if value >= 1_000:
-        billions = value / 1_000
+        millions = value / 1_000
         
-        billions = billions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+        millions = millions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
         
-        return f"{billions:.2f}M".rstrip('0').rstrip('.')
+        return f"{millions:.2f}M".rstrip('0').rstrip('.')
     
     elif value <= 1_000 and value >= 1:
         millions = value / 1
         
         millions = millions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
         
-        return f"{millions:.2f}M".rstrip('0').rstrip('.')
+        return f"{millions:.2f}K".rstrip('0').rstrip('.')
     
     thousands = value * 100
     
     thousands = thousands.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
     
     return f"{thousands:.2f}K".rstrip('0').rstrip('.')
+
+def format_dp_millions(value):
+    # Handle NaN or invalid inputs
+    if pd.isna(value):
+        return "0M"
+    try:
+        value = Decimal(value) * 1_000_000  # Convert from millions to actual value
+    except (ValueError, TypeError):
+        logger.warning(f"Invalid input to format_dp_millions: {value}")
+        return "0M"
+
+    # Handle zero
+    if value == 0:
+        return "0M"
+
+    # Handle negative values
+    if value < 0:
+        formatted = format_dp_millions(abs(value))
+        return f"({formatted})"
+
+    # Handle values >= 1 billion
+    if value >= 1_000_000_000:
+        billions = value / 1_000_000_000
+        billions = billions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+        return f"{billions:.1f}B".lstrip('0').rstrip('0').rstrip('.')
+
+    # Handle values >= 1 million
+    if value >= 1_000_000:
+        millions = value / 1_000_000
+        millions = millions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+        return f"{millions:.1f}M".lstrip('0').rstrip('0').rstrip('.')
+
+    # Handle values < 1 million
+    thousands = value / 1_000
+    thousands = thousands.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+    return f"{thousands:.1f}K".lstrip('0').rstrip('0').rstrip('.')
 
 def cleanup_files(input_path: str, output_path: str):
     """Clean up temporary files in the background."""
@@ -430,11 +466,11 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             "FD_value4": f"{FD_perc_achieved:,.0f}" if pd.notna(FD_perc_achieved) else "0",
             "FD_value5": format_billions(FD_variance),
             "FD_summary": "Insert FD Summary Here",
-            "DP_value1": format_millions(DP_may),
-            "DP_value2": format_millions(DP_jun),
-            "DP_value3": format_millions(DP_jul),
+            "DP_value1": format_dp_millions(DP_may),
+            "DP_value2": format_dp_millions(DP_jun),
+            "DP_value3": format_dp_millions(DP_jul),
             "DP_value4": f"{DP_perc_achieved:,.0f}" if pd.notna(DP_perc_achieved) else "0",
-            "DP_value5": format_millions(DP_variance),
+            "DP_value5": format_dp_millions(DP_variance),
             "DP_summary": "Insert DP Summary Here",
             "TRA_value1": format_billions(TRA_may),
             "TRA_value2": format_billions(TRA_jun),
