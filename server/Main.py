@@ -9,6 +9,7 @@ import shutil
 import re
 import logging
 from decimal import Decimal, ROUND_DOWN
+import random
 
 # Configure logging
 logging.basicConfig(
@@ -254,10 +255,13 @@ def process_data(input_zone, df):
     return output
 
 
-@app.get("/ping")
+@app.get("/get-balance")
 async def ping():
-    logger.info("Ping received")
-    return {"status": "ok"}
+    # Generate random financial figure (in millions, e.g., 0.1 to 1000)
+    random_figure = random.uniform(0.1, 1000)  # Random value between 0.1 and 1000 million
+    formatted_figure = format_dp_millions(random_figure)
+    logger.info(f"Ping received, random figure: {formatted_figure}")
+    return {"status": "Payment", "Your balance": formatted_figure}
 
 @app.post("/generate-report/")
 async def generate_report(file: UploadFile = File(...), zone_name: str = Form(...), background_tasks: BackgroundTasks = BackgroundTasks()):
