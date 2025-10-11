@@ -33,6 +33,7 @@ app.add_middleware(
 # List of columns to convert to numeric
 numeric_columns = [
     "PBT 2025 YTD  ACHVD", "PBT 2025 FULL YR BGT", "PBT 2025 YOY VAR", "PBT Exp Run Rate",
+    "PBT Cost to Income Ratio",
     "DDA May-25", "DDA Jun-25", "DDA Jul-25", "DDA 2025 FULL YR BGT", "DDA YTD Variance",
     "SAV May-25", "SAV Jun-25", "SAV Jul-25", "SAV 2025 FULL YR BGT", "SAV YTD Variance",
     "FD May-25", "FD Jun-25", "FD Jul-25", "FD 2025 FULL YR BGT", "FD YTD Variance",
@@ -41,13 +42,13 @@ numeric_columns = [
     "AB Jun-25", "AB Jul-25", "AB VAR",
     "AO C/A Opened - Funded", "AO C/A Opened - Unfunded", "AO C/A Opened - Total",
     "AO S/A Opened - Funded", "AO S/A Opened - Unfunded", "AO S/A Opened - Total",
-    "CDS1 ACTIVE", "CDS2 ACTIVE", "CDS1 INACTIVE", "CDS2 INACTIVE", 
+    "CDS1 ACTIVE", "CDS2 ACTIVE", "CDS1 INACTIVE", "CDS2 INACTIVE",
     "CDS1 No. of Cards Issued", "CDS2 No. of Cards Issued",
     "CE May-25", "CE Jun-25", "CE Jul-25",
     "AOB May-25", "AOB Jun-25", "AOB Jul-25",
     "POS ACTIVE", "POS INACTIVE", "POS NEWLY DEPLOYED", "POS RETRIEVED",
     "NXP May-25", "NXP Jun-25", "NXP Jul-25", "NXP YOY VAR",
-    "PBT Mthly Var", "DDA MOM Variance", "SAV MOM Variance", "FD MOM Variance"
+    "TOTAL_DMT_ACT", "No. Reactivated DMT_ACT", "% Reactivated DMT_ACT"
 ]
 
 # Formatting functions
@@ -96,7 +97,6 @@ def format_millions(value):
     return f"{thousands:.2f}K".rstrip('0').rstrip('.')
 
 def format_dp_millions(value):
-    # Handle NaN or invalid inputs
     if pd.isna(value):
         return "0M"
     try:
@@ -105,31 +105,42 @@ def format_dp_millions(value):
         logger.warning(f"Invalid input to format_dp_millions: {value}")
         return "0M"
 
-    # Handle zero
     if value == 0:
         return "0M"
 
-    # Handle negative values
     if value < 0:
         formatted = format_dp_millions(abs(value))
         return f"({formatted})"
 
-    # Handle values >= 1 billion
     if value >= 1_000_000_000:
         billions = value / 1_000_000_000
         billions = billions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
         return f"{billions:.1f}B".lstrip('0').rstrip('0').rstrip('.')
 
-    # Handle values >= 1 million
     if value >= 1_000_000:
         millions = value / 1_000_000
         millions = millions.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
         return f"{millions:.1f}M".lstrip('0').rstrip('0').rstrip('.')
 
-    # Handle values < 1 million
     thousands = value / 1_000
     thousands = thousands.quantize(Decimal('0.1'), rounding=ROUND_DOWN)
     return f"{thousands:.1f}K".lstrip('0').rstrip('0').rstrip('.')
+
+def format_percentage(value):
+    if pd.isna(value):
+        return "0"
+    try:
+        # Handle string inputs with % symbol
+        if isinstance(value, str) and value.endswith('%'):
+            value = value.rstrip('%')
+        value = Decimal(value)
+        # Format values < 1 to two decimal places with truncation, others as integers
+        if 0 < value < 1:
+            return f"{value.quantize(Decimal('0.01'), rounding=ROUND_DOWN)}"
+        return f"{value:.0f}"
+    except (ValueError, TypeError):
+        logger.warning(f"Invalid input to format_percentage: {value}")
+        return "0"
 
 def cleanup_files(input_path: str, output_path: str):
     """Clean up temporary files in the background."""
@@ -142,23 +153,22 @@ def cleanup_files(input_path: str, output_path: str):
         logger.info(f"Deleted temporary output file: {output_path}")
 
 def process_data(input_zone, df):
-    # Remove the ' total' suffix from the user input to extract zone name
     zone_name = re.sub(r'\s*total\s*$', '', input_zone, flags=re.IGNORECASE).strip()
 
-    # Filter the dataframe for the selected zone, excluding the "zone total" row
     zone_data = df[
         (df['ZONES'].str.contains(zone_name, case=False, na=False)) & 
         (~df['ZONES'].str.strip().str.lower().eq(f"{zone_name.lower()} total"))
     ]
     
-    # Sorting the data to get the highest and lowest values
+    
     pbt_sorted = zone_data.sort_values(by='PBT 2025 YTD  ACHVD', ascending=False)
     dda_sorted = zone_data.sort_values(by='DDA Jul-25', ascending=False)
     sav_sorted = zone_data.sort_values(by='SAV Jul-25', ascending=False)
     fd_sorted = zone_data.sort_values(by='FD Jul-25', ascending=False)
     dp_sorted = zone_data.sort_values(by='DP Jul-25', ascending=False)
+    pbt_cost_to_income_sorted = zone_data.sort_values(by='PBT Cost to Income Ratio', ascending=False)
+    dmt_act_sorted = zone_data.sort_values(by='TOTAL_DMT_ACT', ascending=False)
 
-    # Get the highest and lowest branches for each category
     highest_pbt = pbt_sorted.iloc[0]
     lowest_pbt = pbt_sorted.iloc[-1]
     
@@ -174,13 +184,20 @@ def process_data(input_zone, df):
     highest_dp = dp_sorted.iloc[0]
     lowest_dp = dp_sorted.iloc[-1]
     
-    # Function to convert variance with parentheses to negative value
+    highest_pbt_cost_to_income = pbt_cost_to_income_sorted.iloc[0]
+    lowest_pbt_cost_to_income = pbt_cost_to_income_sorted.iloc[-1]
+    
+    highest_dmt_act = dmt_act_sorted.iloc[0]
+    lowest_dmt_act = dmt_act_sorted.iloc[-1]
+    
+    logger.info (f"Highest branch: {highest_dmt_act['BRANCHES']}")
+    logger.info (f"Highest branch: {lowest_dmt_act['BRANCHES']}")
+    
     def get_variance(variance):
         if isinstance(variance, str) and variance.startswith('-'):
-            return -float(variance[1:-1])  # Convert (xxx) to -xxx
+            return -float(variance[1:-1])
         return float(variance)
 
-    # Monthly variances for each category
     pbt_high_var = get_variance(highest_pbt['PBT Mthly Var'])
     pbt_low_var = get_variance(lowest_pbt['PBT Mthly Var'])
     
@@ -193,14 +210,14 @@ def process_data(input_zone, df):
     fd_high_var = get_variance(highest_fd['FD MOM Variance'])
     fd_low_var = get_variance(lowest_fd['FD MOM Variance'])
 
-    # Calculate total for each category
     total_pbt = zone_data['PBT 2025 YTD  ACHVD'].sum()
     total_dda = zone_data['DDA Jul-25'].sum()
     total_sav = zone_data['SAV Jul-25'].sum()
     total_fd = zone_data['FD Jul-25'].sum()
     total_dp = zone_data['DP Jul-25'].sum()
+    total_dmt_act = zone_data['TOTAL_DMT_ACT'].sum()
+    
 
-    # Calculate percentage contribution for each category
     pbt_high_perc = (highest_pbt['PBT 2025 YTD  ACHVD'] / total_pbt) * 100 if total_pbt != 0 else 0
     pbt_low_perc = (lowest_pbt['PBT 2025 YTD  ACHVD'] / total_pbt) * 100 if total_pbt != 0 else 0
     
@@ -215,8 +232,13 @@ def process_data(input_zone, df):
     
     dp_high_perc = (highest_dp['DP Jul-25'] / total_dp) * 100 if total_dp != 0 else 0
     dp_low_perc = (lowest_dp['DP Jul-25'] / total_dp) * 100 if total_dp != 0 else 0
-
-    # Prepare the dictionary to output placeholders for the template
+    
+    pbt_cost_to_income_high_perc = (highest_pbt_cost_to_income['PBT Cost to Income Ratio'] / total_pbt) * 100 if total_pbt != 0 else 0
+    pbt_cost_to_income_low_perc = (lowest_pbt_cost_to_income['PBT Cost to Income Ratio'] / total_pbt) * 100 if total_pbt != 0 else 0
+    
+    dmt_act_high_perc = (highest_dmt_act['TOTAL_DMT_ACT'] / total_dmt_act) * 100 if total_dmt_act != 0 else 0
+    dmt_act_low_perc = (lowest_dmt_act['TOTAL_DMT_ACT'] / total_dmt_act) * 100 if total_dmt_act != 0 else 0
+    
     output = {
         'PBT_branch_high': highest_pbt['BRANCHES'],
         'PBT_branch_low': lowest_pbt['BRANCHES'],
@@ -224,55 +246,55 @@ def process_data(input_zone, df):
         'PBT_branch_low_var': f"{pbt_low_var:,.2f}",
         'PBT_branch_high_perc': f"{pbt_high_perc:,.0f}",
         'PBT_branch_low_perc': f"{pbt_low_perc:,.0f}",
-
+        'PBT_branch_cost_to_income_high': highest_pbt_cost_to_income['BRANCHES'],
+        'PBT_branch_cost_to_income_low': lowest_pbt_cost_to_income['BRANCHES'],
+        'PBT_branch_cost_to_income_high_perc': f"{pbt_cost_to_income_high_perc:,.0f}",
+        'PBT_branch_cost_to_income_low_perc': f"{pbt_cost_to_income_low_perc:,.0f}",
         'DDA_branch_high': highest_dda['BRANCHES'],
         'DDA_branch_low': lowest_dda['BRANCHES'],
         'DDA_branch_high_var': f"{dda_high_var:,.2f}",
         'DDA_branch_low_var': f"{dda_low_var:,.2f}",
         'DDA_branch_high_perc': f"{dda_high_perc:,.0f}",
         'DDA_branch_low_perc': f"{dda_low_perc:,.0f}",
-
         'SAV_branch_high': highest_sav['BRANCHES'],
         'SAV_branch_low': lowest_sav['BRANCHES'],
         'SAV_branch_high_var': f"{sav_high_var:,.2f}",
         'SAV_branch_low_var': f"{sav_low_var:,.2f}",
         'SAV_branch_high_perc': f"{sav_high_perc:,.0f}",
         'SAV_branch_low_perc': f"{sav_low_perc:,.0f}",
-
         'FD_branch_high': highest_fd['BRANCHES'],
         'FD_branch_low': lowest_fd['BRANCHES'],
         'FD_branch_high_var': f"{fd_high_var:,.2f}",
         'FD_branch_low_var': f"{fd_low_var:,.2f}",
         'FD_branch_high_perc': f"{fd_high_perc:,.0f}",
         'FD_branch_low_perc': f"{fd_low_perc:,.0f}",
-
         'DP_branch_high': highest_dp['BRANCHES'],
         'DP_branch_low': lowest_dp['BRANCHES'],
         'DP_branch_high_perc': f"{dp_high_perc:,.0f}",
         'DP_branch_low_perc': f"{dp_low_perc:,.0f}",
+        'DMT_ACT_branch_high': highest_dmt_act['BRANCHES'],
+        'DMT_ACT_branch_low': lowest_dmt_act['BRANCHES'],
+        'DMT_ACT_branch_high_perc': f"{dmt_act_high_perc:,.0f}",
+        'DMT_ACT_branch_low_perc': f"{dmt_act_low_perc:,.0f}",
     }
     
     return output
 
-
 @app.get("/get-balance")
 async def ping():
-    # Generate random financial figure (in millions, e.g., 0.1 to 1000)
-    random_figure = random.uniform(0.1, 1000)  # Random value between 0.1 and 1000 million
+    random_figure = random.uniform(0.1, 1000)
     formatted_figure = format_dp_millions(random_figure)
-    logger.info(f"Ping received, random figure: {formatted_figure}")
+    logger.info(f"Request for balance received")
     return {"status": "Payment", "Your balance": formatted_figure}
 
 @app.post("/generate-report/")
 async def generate_report(file: UploadFile = File(...), zone_name: str = Form(...), background_tasks: BackgroundTasks = BackgroundTasks()):
     logger.info(f"Received request for zone_name: '{zone_name}', file: '{file.filename}', size: {file.size} bytes")
 
-    # File validation
     if not file.filename or not (file.filename.endswith('.xlsx') or file.filename.endswith('.xls') or file.filename.endswith('.csv')):
         logger.error(f"Invalid file type: {file.filename}")
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload an Excel or CSV file.")
     
-    # Create a temporary directory to store the uploaded file
     logger.info(f"Creating temporary file for {file.filename}")
     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
         temp_file_path = temp_file.name
@@ -288,32 +310,27 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
     main_file_path = os.path.join(os.path.dirname(__file__), "mpaStructure.xlsx")
     logger.info(f"Checking for structure template at: {main_file_path}")
     
-    # Check if template exists
     if not os.path.exists(template_path):
         logger.error(f"Template file not found at: {template_path}")
         os.unlink(temp_file_path)
         raise HTTPException(status_code=500, detail="Template file not found.")
     
-    # Check if structure template exists
     if not os.path.exists(main_file_path):
         logger.error(f"Structure template file not found at: {main_file_path}")
         os.unlink(temp_file_path)
         raise HTTPException(status_code=500, detail="Structure template file not found.")
     
     try:
-        # Load structure template columns
         logger.info(f"Loading structure template columns from: {main_file_path}")
-        df_template = pd.read_excel(main_file_path, nrows=0)  # Load only headers
+        df_template = pd.read_excel(main_file_path, nrows=0)
         structure_columns = df_template.columns.tolist()
 
-        # Load uploaded file data, skipping the header row
         logger.info(f"Reading uploaded file data (minus headers): {temp_file_path}")
         if file.filename.endswith('.csv'):
             df_uploaded = pd.read_csv(temp_file_path, skiprows=5, header=None)
         else:
             df_uploaded = pd.read_excel(temp_file_path, skiprows=5, header=None)
 
-        # Assign structure columns to uploaded data
         logger.info("Assigning structure columns to uploaded data")
         if len(structure_columns) != df_uploaded.shape[1]:
             logger.error(f"Column mismatch: Structure has {len(structure_columns)} columns, uploaded data has {df_uploaded.shape[1]} columns")
@@ -321,7 +338,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
 
         df = pd.DataFrame(data=df_uploaded.values, columns=structure_columns)
         
-        # Clean and convert columns to numeric
         logger.info("Converting columns to numeric")
         for col in numeric_columns:
             if col in df.columns:
@@ -331,7 +347,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             else:
                 logger.warning(f"Column {col} not found in DataFrame")
 
-        # Find the row where the "ZONES" column matches user input
         logger.info(f"Searching for zone: {zone_name}")
         zones = df[df["ZONES"].str.strip().str.upper() == zone_name.strip().upper()]
         if zones.empty:
@@ -339,22 +354,21 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             raise HTTPException(status_code=404, detail=f"No data found for zone '{zone_name}'.")
         logger.info(f"Found {len(zones)} matching rows for zone: {zone_name}")
 
-        # Extract scalar values for the specific row
         row = zones.iloc[0]
         logger.info("Extracting data from row")
 
-        # Process additional data for branches
         branch_data = process_data(zone_name, df)
         logger.info("Branch data processed")
 
-        # PBT data
         PBT_achieved = row["PBT 2025 YTD  ACHVD"]
         PBT_budget = row["PBT 2025 FULL YR BGT"]
         PBT_perc_budget = (PBT_achieved / PBT_budget * 100) if PBT_budget != 0 else 0
         PBT_variance = row["PBT 2025 YOY VAR"]
         PBT_run_rate = row["PBT Exp Run Rate"]
+        PBT_cost_to_income = row["PBT Cost to Income Ratio"]
 
-        # DDA data
+        logger.info((f"cost to income: {PBT_cost_to_income}"))
+
         DDA_may = row["DDA May-25"]
         DDA_jun = row["DDA Jun-25"]
         DDA_jul = row["DDA Jul-25"]
@@ -362,7 +376,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         DDA_perc_achieved = (DDA_jul / DDA_budget * 100) if DDA_budget != 0 else 0
         DDA_variance = row["DDA YTD Variance"]
 
-        # SAV data
         SAV_may = row["SAV May-25"]
         SAV_jun = row["SAV Jun-25"]
         SAV_jul = row["SAV Jul-25"]
@@ -370,7 +383,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         SAV_perc_achieved = (SAV_jul / SAV_budget * 100) if SAV_budget != 0 else 0
         SAV_variance = row["SAV YTD Variance"]
 
-        # FD data
         FD_may = row["FD May-25"]
         FD_jun = row["FD Jun-25"]
         FD_jul = row["FD Jul-25"]
@@ -378,7 +390,6 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         FD_perc_achieved = (FD_jul / FD_budget * 100) if FD_budget != 0 else 0
         FD_variance = row["FD YTD Variance"]
 
-        # DP data
         DP_may = row["DP May-25"]
         DP_jun = row["DP Jun-25"]
         DP_jul = row["DP Jul-25"]
@@ -386,19 +397,16 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         DP_perc_achieved = (DP_jul / DP_budget * 100) if DP_budget != 0 else 0
         DP_variance = row["DP YTD Variance"]
 
-        # TRA data
         TRA_may = row["TRA May-25"]
         TRA_jun = row["TRA Jun-25"]
         TRA_jul = row["TRA Jul-25"]
         TRA_loan_to_deposit_ratio = (row["TRA Loan to Dep"] or 0) * 100
         TRA_variance = row["TRA YTD Variance"]
 
-        # AB data
         AB_jun = row["AB Jun-25"]
         AB_jul = row["AB Jul-25"]
         AB_var = row["AB VAR"]
 
-        # AO data
         AO_CA_funded = row["AO C/A Opened - Funded"]
         AO_CA_unfunded = row["AO C/A Opened - Unfunded"]
         AO_CA_total = row["AO C/A Opened - Total"]
@@ -406,44 +414,41 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         AO_SA_unfunded = row["AO S/A Opened - Unfunded"]
         AO_SA_total = row["AO S/A Opened - Total"]
 
-        # CDS data
         CDS_active = row["CDS1 ACTIVE"] + row["CDS2 ACTIVE"]
         CDS_inactive = row["CDS1 INACTIVE"] + row["CDS2 INACTIVE"]
         CDS_total = row["CDS1 No. of Cards Issued"] + row["CDS2 No. of Cards Issued"]
 
-        # CE data
         CE_may = row["CE May-25"]
         CE_jun = row["CE Jun-25"]
         CE_jul = row["CE Jul-25"]
         CE_total = CE_may + CE_jun + CE_jul
 
-        # AOB data
         AOB_may = row["AOB May-25"]
         AOB_jun = row["AOB Jun-25"]
         AOB_jul = row["AOB Jul-25"]
         AOB_total = AOB_may + AOB_jun + AOB_jul
 
-        # POS data
         POS_active = row["POS ACTIVE"]
         POS_inactive = row["POS INACTIVE"]
         POS_deployed = row["POS NEWLY DEPLOYED"]
         POS_retrieved = row["POS RETRIEVED"]
 
-        # NXP data
         NXP_may = row["NXP May-25"]
         NXP_jun = row["NXP Jun-25"]
         NXP_jul = row["NXP Jul-25"]
         NXP_variance = row["NXP YOY VAR"]
 
-        # Load Word template
+        DMT_ACT_total = row["TOTAL_DMT_ACT"]
+        DMT_ACT_reactivated = row["No. Reactivated DMT_ACT"]
+        DMT_ACT_reactivated_perc = row["% Reactivated DMT_ACT"]
+
         logger.info(f"Loading Word template: {template_path}")
         doc = DocxTemplate(template_path)
 
-        # Prepare zone_name for context
         title = re.sub(r'\s*total\s*$', '', zone_name, flags=re.IGNORECASE).strip().upper()
         logger.info(f"Prepared title: {title}")
+        TRA_ratio = f"{TRA_loan_to_deposit_ratio:,.0f}" if pd.notna(TRA_loan_to_deposit_ratio) else "0"
 
-        # Define context (placeholders in Word)
         context = {
             "title": title,
             "PBT_value1": format_billions(PBT_achieved),
@@ -451,6 +456,7 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             "PBT_value3": f"{PBT_perc_budget:,.0f}" if pd.notna(PBT_perc_budget) else "0",
             "PBT_value4": format_billions(PBT_variance),
             "PBT_value5": format_billions(PBT_run_rate),
+            "PBT_value6": format_percentage(PBT_cost_to_income),
             "PBT_summary": "Insert PBT Summary Here",
             "DDA_value1": format_billions(DDA_may),
             "DDA_value2": format_billions(DDA_jun),
@@ -481,7 +487,7 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             "TRA_value3": format_billions(TRA_jul),
             "TRA_value4": f"{TRA_loan_to_deposit_ratio:,.0f}" if pd.notna(TRA_loan_to_deposit_ratio) else "0",
             "TRA_value5": format_billions(TRA_variance),
-            "TRA_summary": "Insert TRA Summary Here",
+            "TRA_summary": f"The Zone recorded a loan to Deposit Ratio of {TRA_ratio}% in the month of September",
             "AB_value1": format_millions(AB_jun),
             "AB_value2": format_millions(AB_jul),
             "AB_value3": format_millions(AB_var),
@@ -513,27 +519,26 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             "NXP_value2": format_millions(NXP_jun),
             "NXP_value3": format_millions(NXP_jul),
             "NXP_value4": format_millions(NXP_variance),
+            "DMT_ACT_value1": f"{DMT_ACT_total:,.0f}" if pd.notna(DMT_ACT_total) else "0",
+            "DMT_ACT_value2": f"{DMT_ACT_reactivated:,.0f}" if pd.notna(DMT_ACT_reactivated) else "0",
+            "DMT_ACT_value3": f"{DMT_ACT_reactivated_perc:,.0f}" if pd.notna(DMT_ACT_reactivated_perc) else "0",
             **branch_data
         }
         logger.info("Context prepared for template rendering")
 
-        # Render and save
         logger.info(f"Rendering template to: {temp_output_path}")
         doc.render(context)
         doc.save(temp_output_path)
         logger.info(f"Template rendered and saved to: {temp_output_path}")
         
-        # Verify the output file exists and has content
         if not os.path.exists(temp_output_path):
             logger.error(f"Output file not created at: {temp_output_path}")
             raise HTTPException(status_code=500, detail="Failed to create output file.")
         file_size = os.path.getsize(temp_output_path)
         logger.info(f"Output file size: {file_size} bytes")
 
-        # Schedule cleanup as a background task
         background_tasks.add_task(cleanup_files, temp_file_path, temp_output_path)
 
-        # Return the generated file
         logger.info(f"Returning FileResponse for: {temp_output_path}")
         return FileResponse(
             temp_output_path,
