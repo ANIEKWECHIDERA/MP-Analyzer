@@ -130,13 +130,7 @@ def format_percentage(value):
     if pd.isna(value):
         return "0"
     try:
-        # Handle string inputs with % symbol
-        if isinstance(value, str) and value.endswith('%'):
-            value = value.rstrip('%')
-        value = Decimal(value)
-        # Format values < 1 to two decimal places with truncation, others as integers
-        if 0 < value < 1:
-            return f"{value.quantize(Decimal('0.01'), rounding=ROUND_DOWN)}"
+        value = Decimal(value) * 100
         return f"{value:.0f}"
     except (ValueError, TypeError):
         logger.warning(f"Invalid input to format_percentage: {value}")
@@ -159,7 +153,6 @@ def process_data(input_zone, df):
         (df['ZONES'].str.contains(zone_name, case=False, na=False)) & 
         (~df['ZONES'].str.strip().str.lower().eq(f"{zone_name.lower()} total"))
     ]
-    
     
     pbt_sorted = zone_data.sort_values(by='PBT 2025 YTD  ACHVD', ascending=False)
     dda_sorted = zone_data.sort_values(by='DDA Jul-25', ascending=False)
@@ -190,8 +183,8 @@ def process_data(input_zone, df):
     highest_dmt_act = dmt_act_sorted.iloc[0]
     lowest_dmt_act = dmt_act_sorted.iloc[-1]
     
-    logger.info (f"Highest branch: {highest_dmt_act['BRANCHES']}")
-    logger.info (f"Highest branch: {lowest_dmt_act['BRANCHES']}")
+    # logger.info (f"Highest branch: {highest_dmt_act['BRANCHES']}")
+    # logger.info (f"Highest branch: {lowest_dmt_act['BRANCHES']}")
     
     def get_variance(variance):
         if isinstance(variance, str) and variance.startswith('-'):
@@ -277,7 +270,6 @@ def process_data(input_zone, df):
         'DMT_ACT_branch_high_perc': f"{dmt_act_high_perc:,.0f}",
         'DMT_ACT_branch_low_perc': f"{dmt_act_low_perc:,.0f}",
     }
-    
     return output
 
 @app.get("/get-balance")
@@ -338,6 +330,12 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
 
         df = pd.DataFrame(data=df_uploaded.values, columns=structure_columns)
         
+                # Add logging for raw PBT Cost to Income Ratio output
+        # if "PBT Cost to Income Ratio" in df.columns:
+        #     logger.info(f"Raw PBT Cost to Income Ratio (before conversion): {df[df['ZONES'] == 'Abuja 07']['% Reactivated DMT_ACT'].to_list()}")
+        # else:
+        #     logger.warning("PBT Cost to Income Ratio column not found in DataFrame")
+        
         logger.info("Converting columns to numeric")
         for col in numeric_columns:
             if col in df.columns:
@@ -367,7 +365,7 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
         PBT_run_rate = row["PBT Exp Run Rate"]
         PBT_cost_to_income = row["PBT Cost to Income Ratio"]
 
-        logger.info((f"cost to income: {PBT_cost_to_income}"))
+        # logger.info((f"cost to income: {PBT_cost_to_income}"))
 
         DDA_may = row["DDA May-25"]
         DDA_jun = row["DDA Jun-25"]
@@ -521,7 +519,7 @@ async def generate_report(file: UploadFile = File(...), zone_name: str = Form(..
             "NXP_value4": format_millions(NXP_variance),
             "DMT_ACT_value1": f"{DMT_ACT_total:,.0f}" if pd.notna(DMT_ACT_total) else "0",
             "DMT_ACT_value2": f"{DMT_ACT_reactivated:,.0f}" if pd.notna(DMT_ACT_reactivated) else "0",
-            "DMT_ACT_value3": f"{DMT_ACT_reactivated_perc:,.0f}" if pd.notna(DMT_ACT_reactivated_perc) else "0",
+            "DMT_ACT_value3": format_percentage(DMT_ACT_reactivated_perc) if pd.notna(DMT_ACT_reactivated_perc) else "0",
             **branch_data
         }
         logger.info("Context prepared for template rendering")
