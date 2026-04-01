@@ -31,8 +31,10 @@ def profile_history(
     zone: str | None = Query(default=None),
     date_from: datetime | None = Query(default=None),
     date_to: datetime | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> HistoryResponse:
-    items, total = get_history(db, profile_id, zone, date_from, date_to)
-    return HistoryResponse(items=items, total=total)
-
+    items, total = get_history(db, profile_id, zone, date_from, date_to, page, page_size)
+    total_pages = max((total + page_size - 1) // page_size, 1)
+    return HistoryResponse(items=items, total=total, page=page, page_size=page_size, total_pages=total_pages)

@@ -48,15 +48,16 @@ export const generateReport = async (
 
 export const getHistory = async (
   profileId: number,
-  filters: { zone?: string; dateFrom?: string; dateTo?: string }
+  filters: { zone?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number }
 ) => {
   const response = await api.get<HistoryResponse>(`/profiles/${profileId}/history`, {
     params: {
       zone: filters.zone || undefined,
       date_from: filters.dateFrom || undefined,
       date_to: filters.dateTo || undefined,
+      page: filters.page || 1,
+      page_size: filters.pageSize || 10,
     },
   });
   return response.data;
 };
-

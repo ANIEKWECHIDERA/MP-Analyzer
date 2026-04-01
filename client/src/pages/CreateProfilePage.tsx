@@ -49,10 +49,10 @@ const CreateProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <Card className="mx-auto max-w-2xl">
+    <div className="min-h-screen bg-[linear-gradient(180deg,rgba(11,79,74,0.08),rgba(255,255,255,0))] p-6">
+      <Card className="mx-auto max-w-2xl border-teal-100 shadow-sm">
         <CardHeader>
-          <CardTitle>Create New Profile</CardTitle>
+          <CardTitle className="text-teal-950">Create New Profile</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreate} className="space-y-4">
@@ -68,7 +68,7 @@ const CreateProfilePage: React.FC = () => {
               onChange={(event) => setEmail(event.target.value)}
             />
             <div className="flex gap-3">
-              <Button type="submit" disabled={isSaving}>
+              <Button type="submit" disabled={isSaving} className="bg-teal-950 hover:bg-teal-900">
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -79,7 +79,11 @@ const CreateProfilePage: React.FC = () => {
                 )}
               </Button>
               <Link to="/profiles/select">
-                <Button type="button" variant="outline">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-teal-200 text-teal-900 hover:bg-teal-50"
+                >
                   Back to Select
                 </Button>
               </Link>

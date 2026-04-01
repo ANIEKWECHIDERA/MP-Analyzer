@@ -36,10 +36,10 @@ const SelectProfilePage: React.FC = () => {
   }, [query]);
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <Card className="mx-auto max-w-3xl">
+    <div className="min-h-screen bg-[linear-gradient(180deg,rgba(11,79,74,0.08),rgba(255,255,255,0))] p-6">
+      <Card className="mx-auto max-w-3xl border-teal-100 shadow-sm">
         <CardHeader>
-          <CardTitle>Select Profile</CardTitle>
+          <CardTitle className="text-teal-950">Select Profile</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -49,7 +49,7 @@ const SelectProfilePage: React.FC = () => {
               onChange={(event) => setQuery(event.target.value)}
             />
             <Link to="/profiles/new">
-              <Button>Create New Profile</Button>
+              <Button className="bg-teal-950 hover:bg-teal-900">Create New Profile</Button>
             </Link>
           </div>
 
@@ -73,15 +73,15 @@ const SelectProfilePage: React.FC = () => {
                     setStoredProfile(profile);
                     navigate("/");
                   }}
-                  className="flex w-full items-center justify-between rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
+                  className="flex w-full items-center justify-between rounded-lg border border-teal-100 bg-white p-4 text-left transition-colors hover:bg-teal-50/60"
                 >
                   <div>
-                    <p className="font-medium">{profile.name}</p>
+                    <p className="font-medium text-teal-950">{profile.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {profile.email || "No email provided"}
                     </p>
                   </div>
-                  <span className="text-sm text-muted-foreground">Use profile</span>
+                  <span className="text-sm text-teal-700">Use profile</span>
                 </button>
               ))}
             </div>
@@ -93,4 +93,3 @@ const SelectProfilePage: React.FC = () => {
 };
 
 export default SelectProfilePage;
-

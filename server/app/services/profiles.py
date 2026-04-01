@@ -51,6 +51,8 @@ def get_history(
     zone_query: str | None,
     date_from: datetime | None,
     date_to: datetime | None,
+    page: int,
+    page_size: int,
 ) -> tuple[list[ReportRun], int]:
     stmt = select(ReportRun).where(ReportRun.profile_id == profile_id)
     count_stmt = select(func.count()).select_from(ReportRun).where(ReportRun.profile_id == profile_id)
@@ -65,6 +67,6 @@ def get_history(
         inclusive = date_to.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=UTC)
         stmt = stmt.where(ReportRun.created_at <= inclusive)
         count_stmt = count_stmt.where(ReportRun.created_at <= inclusive)
-    stmt = stmt.order_by(ReportRun.created_at.desc()).limit(100)
+    offset = max(page - 1, 0) * page_size
+    stmt = stmt.order_by(ReportRun.created_at.desc()).offset(offset).limit(page_size)
     return list(db.scalars(stmt)), db.scalar(count_stmt) or 0
-

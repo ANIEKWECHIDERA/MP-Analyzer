@@ -36,6 +36,9 @@ class HistoryItem(BaseModel):
 class HistoryResponse(BaseModel):
     items: list[HistoryItem]
     total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 
 class ZoneSuggestionsResponse(BaseModel):
@@ -49,4 +52,3 @@ class ZoneSuggestionsResponse(BaseModel):
 class PreviewResponse(ZoneSuggestionsResponse):
     ready: bool
     header_row_index: int
-

@@ -119,6 +119,44 @@ The dominant business workflow is:
 - Removed the extra profile-scoping helper copy from the main screen's current-profile card.
 - Updated the main screen styling to stay within the existing teal-centered visual theme instead of introducing a separate success color family.
 - Filtered the literal `ZONES` header value out of parsed zone suggestions so it never appears in the frontend list.
+- Extended the same teal-centered styling across the select-profile, create-profile, and history screens.
+- Updated the shared theme tokens in `client/src/index.css` so default buttons and accents now follow the app's established teal palette instead of the previous neutral dark primary color.
+- Added profile-scoped upload persistence in `client/src/lib/upload-session.ts` using IndexedDB so the selected workbook survives navigation away from the upload page and returns automatically when the user comes back.
+- Added an explicit remove-file control on the main upload screen so users can clear the persisted workbook and choose another file without changing profiles.
+- Added multi-zone generation on the main upload screen by letting users queue zones as removable chips before generating reports.
+- Updated the history screen to paginate at 10 records per page, with backend support for `page` and `page_size`.
+- Updated the themed navigation buttons, including `View History`, `Change Profile`, and `Back to Select`, so they follow the teal app palette consistently.
+
+## Latest Verification
+
+- Rebuilt the frontend after the theme-token update and confirmed `npm run build` passes.
+- Re-ran backend tests with `..\.venv\Scripts\python.exe -m pytest` and confirmed `4 passed`.
+- Re-verified the parentheses-negative parser directly:
+  - `(35)` -> `-35`
+  - `(1,200.50)` -> `-1200.50`
+  - `(35%)` -> `-0.35`
+  - `-10` -> `-10`
+- Restarted the backend and re-verified that `http://127.0.0.1:8000/docs` returns HTTP `200`.
+- Expanded backend verification to `6 passed` after adding:
+  - negative DP formatter coverage
+  - history pagination coverage
+- Verified workbook-derived negative formatting using the December zonal distribution file:
+  - branch variance sample `-42.4528` now formats as `-42M`
+  - DP variance sample `-0.886876003` now formats as `-886.8K`
+- Verified live browser behavior with Playwright on `http://localhost:5173`:
+  - selected profile routing works
+  - workbook upload succeeds and schema preview is shown
+  - returning from history restores the uploaded workbook automatically
+  - remove-file clears the persisted upload and restores the file picker
+  - real report generation succeeds and updates the success card immediately
+  - history pagination controls render in the UI
+
+## Reporting and History Update
+
+- Updated `server/app/services/normalization.py` so DP-style negative values now render with a leading minus sign rather than parentheses.
+- Updated `server/app/services/reporting.py` so summary variance values use the same millions/billions formatting helpers as the headline metric values.
+- Updated `server/app/services/profiles.py`, `server/app/routers/profiles.py`, `server/app/schemas.py`, and `client/src/services/api.ts` to support paginated history responses.
+- Added a development-friendly origin regex in `server/app/main.py` so local frontend hosts like `localhost` and `127.0.0.1` are accepted reliably during browser testing.
 
 ## Restored Structure Workflow
 

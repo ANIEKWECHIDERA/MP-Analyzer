@@ -27,6 +27,9 @@ export interface HistoryItem {
 export interface HistoryResponse {
   items: HistoryItem[];
   total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 export interface SchemaPreview {
@@ -49,16 +52,21 @@ export interface ZoneSuggestionResponse {
 
 export interface MainFormState {
   file: File | null;
+  fileName: string;
   zoneName: string;
+  selectedZones: string[];
   isLoading: boolean;
   isPreviewLoading: boolean;
   preview: SchemaPreview | null;
-  lastGenerated: GeneratedReportSummary | null;
+  generatedReports: GeneratedReportSummary[];
 }
 
 export interface MainFormActions {
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleZoneChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  addZone: () => Promise<void>;
+  removeZone: (zoneName: string) => void;
+  removeFile: () => Promise<void>;
   handleSubmit: (e: React.FormEvent) => Promise<void>;
 }
 

@@ -17,6 +17,9 @@ const HistoryPage: React.FC = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     setProfile(getStoredProfile());
@@ -33,8 +36,13 @@ const HistoryPage: React.FC = () => {
           zone: zoneFilter,
           dateFrom,
           dateTo,
+          page,
+          pageSize: 10,
         });
         setItems(response.items);
+        setPage(response.page);
+        setTotalPages(response.total_pages);
+        setTotal(response.total);
       } catch (error: any) {
         await Swal.fire({
           icon: "error",
@@ -47,14 +55,14 @@ const HistoryPage: React.FC = () => {
       }
     };
     void load();
-  }, [profile, zoneFilter, dateFrom, dateTo]);
+  }, [profile, zoneFilter, dateFrom, dateTo, page]);
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <Card className="mx-auto max-w-2xl">
+      <div className="min-h-screen bg-[linear-gradient(180deg,rgba(11,79,74,0.08),rgba(255,255,255,0))] p-6">
+        <Card className="mx-auto max-w-2xl border-teal-100 shadow-sm">
           <CardHeader>
-            <CardTitle>No Profile Selected</CardTitle>
+            <CardTitle className="text-teal-950">No Profile Selected</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
@@ -62,10 +70,10 @@ const HistoryPage: React.FC = () => {
             </p>
             <div className="flex gap-3">
               <Link to="/">
-                <Button>Back to Upload</Button>
+                <Button className="bg-teal-950 hover:bg-teal-900">Back to Upload</Button>
               </Link>
               <Link to="/profiles/select">
-                <Button variant="outline">Select Profile</Button>
+                <Button variant="outline" className="border-teal-200 text-teal-900 hover:bg-teal-50">Select Profile</Button>
               </Link>
             </div>
           </CardContent>
@@ -75,51 +83,60 @@ const HistoryPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen bg-[linear-gradient(180deg,rgba(11,79,74,0.08),rgba(255,255,255,0))] p-4 md:p-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-semibold">History</h1>
+            <h1 className="text-3xl font-semibold text-teal-950">History</h1>
             <p className="text-muted-foreground">
               Showing report runs for {profile.name}.
             </p>
           </div>
           <div className="flex gap-3">
             <Link to="/">
-              <Button variant="outline">Back to Upload</Button>
+              <Button variant="outline" className="border-teal-200 text-teal-900 hover:bg-teal-50">Back to Upload</Button>
             </Link>
             <Link to="/profiles/select">
-              <Button variant="outline">Change Profile</Button>
+              <Button variant="outline" className="border-teal-200 text-teal-900 hover:bg-teal-50">Change Profile</Button>
             </Link>
           </div>
         </div>
 
-        <Card>
+        <Card className="border-teal-100 shadow-sm">
           <CardHeader>
-            <CardTitle>Filters</CardTitle>
+            <CardTitle className="text-teal-950">Filters</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
             <Input
               placeholder="Filter by zone"
               value={zoneFilter}
-              onChange={(event) => setZoneFilter(event.target.value)}
+              onChange={(event) => {
+                setZoneFilter(event.target.value);
+                setPage(1);
+              }}
             />
             <Input
               type="date"
               value={dateFrom}
-              onChange={(event) => setDateFrom(event.target.value)}
+              onChange={(event) => {
+                setDateFrom(event.target.value);
+                setPage(1);
+              }}
             />
             <Input
               type="date"
               value={dateTo}
-              onChange={(event) => setDateTo(event.target.value)}
+              onChange={(event) => {
+                setDateTo(event.target.value);
+                setPage(1);
+              }}
             />
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-teal-100 shadow-sm">
           <CardHeader>
-            <CardTitle>Processed Zones</CardTitle>
+            <CardTitle className="text-teal-950">Processed Zones</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -164,6 +181,31 @@ const HistoryPage: React.FC = () => {
                 </table>
               </div>
             )}
+            <div className="mt-4 flex items-center justify-between border-t pt-4 text-sm text-muted-foreground">
+              <p>
+                Showing page {page} of {totalPages} - {total} total runs
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-teal-200 text-teal-900 hover:bg-teal-50"
+                  disabled={page <= 1 || isLoading}
+                  onClick={() => setPage((current) => Math.max(current - 1, 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-teal-200 text-teal-900 hover:bg-teal-50"
+                  disabled={page >= totalPages || isLoading}
+                  onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -94,19 +94,19 @@ def format_dp_millions(value: object) -> str:
     if numeric is None:
         return "0M"
     if numeric < 0:
-        return f"({format_dp_millions(abs(numeric))})"
+        return f"-{format_dp_millions(abs(numeric))}"
 
     actual = numeric * Decimal("1000000")
     if actual == 0:
         return "0M"
     if actual >= Decimal("1000000000"):
         billions = (actual / Decimal("1000000000")).quantize(Decimal("0.1"), rounding=ROUND_DOWN)
-        return f"{billions:.1f}B".rstrip("0").rstrip(".")
+        return f"{billions:.1f}".rstrip("0").rstrip(".") + "B"
     if actual >= Decimal("1000000"):
         millions = (actual / Decimal("1000000")).quantize(Decimal("0.1"), rounding=ROUND_DOWN)
-        return f"{millions:.1f}M".rstrip("0").rstrip(".")
+        return f"{millions:.1f}".rstrip("0").rstrip(".") + "M"
     thousands = (actual / Decimal("1000")).quantize(Decimal("0.1"), rounding=ROUND_DOWN)
-    return f"{thousands:.1f}K".rstrip("0").rstrip(".")
+    return f"{thousands:.1f}".rstrip("0").rstrip(".") + "K"
 
 
 def format_percentage(value: object) -> str:
@@ -116,4 +116,3 @@ def format_percentage(value: object) -> str:
     if abs(numeric) <= Decimal("1"):
         numeric = numeric * Decimal("100")
     return f"{numeric:.0f}"
-

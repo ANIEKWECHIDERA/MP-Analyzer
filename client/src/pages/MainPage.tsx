@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMainForm } from "@/hooks/useMainForm";
 import { getStoredProfile } from "@/lib/profile-session";
 import type { Profile } from "@/types/types";
-import { CheckCircle2, FileSpreadsheet, History, UserRound } from "lucide-react";
+import { CheckCircle2, FileSpreadsheet, History, Plus, UserRound, X } from "lucide-react";
 
 const MainPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,13 +33,18 @@ const MainPage: React.FC = () => {
 
   const {
     file,
+    fileName,
     zoneName,
+    selectedZones,
     isLoading,
     isPreviewLoading,
     preview,
-    lastGenerated,
+    generatedReports,
     handleFileChange,
     handleZoneChange,
+    addZone,
+    removeZone,
+    removeFile,
     handleSubmit,
   } = useMainForm(selectedProfile?.id ?? 0);
 
@@ -71,13 +76,13 @@ const MainPage: React.FC = () => {
           </div>
           <div className="flex gap-3">
             <Link to="/history" className="inline-flex">
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="gap-2 border-teal-200 text-teal-900 hover:bg-teal-50">
                 <History className="h-4 w-4" />
                 View History
               </Button>
             </Link>
             <Link to="/profiles/select" className="inline-flex">
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="gap-2 border-teal-200 text-teal-900 hover:bg-teal-50">
                 <UserRound className="h-4 w-4" />
                 Change Profile
               </Button>
@@ -97,7 +102,7 @@ const MainPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {lastGenerated ? (
+        {generatedReports.length > 0 ? (
           <Card className="border-teal-200 bg-teal-50/80 shadow-sm">
             <CardContent className="flex items-start gap-3 pt-6">
               <CheckCircle2 className="mt-0.5 h-5 w-5 text-teal-700" />
@@ -105,12 +110,14 @@ const MainPage: React.FC = () => {
                 <p className="font-medium text-teal-950">
                   Report generated successfully
                 </p>
-                <p className="text-sm text-teal-900">
-                  Zone: {lastGenerated.zoneName} | Source file: {lastGenerated.fileName}
-                </p>
-                <p className="text-sm text-teal-800">
-                  Generated at {new Date(lastGenerated.generatedAt).toLocaleString()}
-                </p>
+                <div className="mt-2 space-y-1 text-sm text-teal-900">
+                  {generatedReports.slice(0, 5).map((report) => (
+                    <p key={`${report.zoneName}-${report.generatedAt}`}>
+                      Zone: {report.zoneName} | Source file: {report.fileName} | Generated at{" "}
+                      {new Date(report.generatedAt).toLocaleString()}
+                    </p>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -128,16 +135,36 @@ const MainPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="rounded-md border bg-gray-50 p-4">
-                <input
-                  id="file-input"
-                  type="file"
-                  onChange={handleFileChange}
-                  disabled={isLoading || isPreviewLoading}
-                  className="block w-full cursor-pointer rounded-lg text-sm file:mr-4 file:rounded-md file:bg-teal-800/25 file:px-4 file:py-2 file:font-medium file:text-teal-950 file:transition-all hover:file:bg-teal-900/50 hover:file:text-gray-50"
-                  title="Upload Excel or CSV file"
-                />
-              </div>
+              {file ? (
+                <div className="flex items-center justify-between rounded-md border border-teal-100 bg-teal-50/50 p-4">
+                  <div>
+                    <p className="text-sm font-medium text-teal-950">Current upload</p>
+                    <p className="text-sm text-teal-800">{fileName}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="border-teal-200 text-teal-900 hover:bg-teal-100"
+                    onClick={() => void removeFile()}
+                    disabled={isLoading || isPreviewLoading}
+                    title="Remove file"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-md border bg-gray-50 p-4">
+                  <input
+                    id="file-input"
+                    type="file"
+                    onChange={handleFileChange}
+                    disabled={isLoading || isPreviewLoading}
+                    className="block w-full cursor-pointer rounded-lg text-sm file:mr-4 file:rounded-md file:bg-teal-800/25 file:px-4 file:py-2 file:font-medium file:text-teal-950 file:transition-all hover:file:bg-teal-900/50 hover:file:text-gray-50"
+                    title="Upload Excel or CSV file"
+                  />
+                </div>
+              )}
 
               {isPreviewLoading ? (
                 <div className="space-y-3 rounded-lg border border-teal-100 bg-teal-50/50 p-4">
@@ -181,6 +208,43 @@ const MainPage: React.FC = () => {
                 disabled={isLoading || isPreviewLoading || !file}
               />
 
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2 border-teal-200 text-teal-900 hover:bg-teal-50"
+                  disabled={isLoading || isPreviewLoading || !zoneName.trim()}
+                  onClick={() => void addZone()}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Zone
+                </Button>
+                {selectedZones.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedZones.map((zone) => (
+                      <span
+                        key={zone}
+                        className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-sm text-teal-950"
+                      >
+                        {zone}
+                        <button
+                          type="button"
+                          onClick={() => removeZone(zone)}
+                          className="text-teal-700 transition-colors hover:text-teal-950"
+                          aria-label={`Remove ${zone}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Add one or more zones, or generate directly from the typed zone.
+                  </p>
+                )}
+              </div>
+
               <SubmitButton
                 isLoading={isLoading || isPreviewLoading}
                 loadingLabel={
@@ -190,7 +254,7 @@ const MainPage: React.FC = () => {
                   isLoading ||
                   isPreviewLoading ||
                   !file ||
-                  !zoneName.trim() ||
+                  (!zoneName.trim() && selectedZones.length === 0) ||
                   (preview ? !preview.ready : false)
                 }
               />
