@@ -158,6 +158,26 @@ The dominant business workflow is:
 - Updated `server/app/services/profiles.py`, `server/app/routers/profiles.py`, `server/app/schemas.py`, and `client/src/services/api.ts` to support paginated history responses.
 - Added a development-friendly origin regex in `server/app/main.py` so local frontend hosts like `localhost` and `127.0.0.1` are accepted reliably during browser testing.
 
+## Structure Bottleneck Strategy
+
+- The biggest remaining operational bottleneck is the manual rebuild of `mpaStructure.xlsx` whenever the source workbook layout changes.
+- The current system is reliable because it uses a tagged structure-header overlay, but it is fragile because it depends on exact column positions and monthly manual maintenance.
+- Recommended long-term direction:
+  - keep the current structure-overlay workflow as a fallback safety mode
+  - add a dynamic schema-detection pipeline as the primary mode
+  - separate column identification from column position
+- Recommended dynamic mapping design:
+  - detect the real header band from the uploaded workbook
+  - flatten multi-row headers into canonical header strings
+  - identify columns using alias dictionaries and pattern rules rather than fixed indexes
+  - identify metric families like `PBT`, `DDA`, `SAV`, `FD`, `DP`, `TRA` by semantic matching
+  - detect the active period from the workbook itself and map current-period columns automatically
+  - persist approved mappings keyed by a workbook fingerprint so repeated layouts do not need to be re-learned
+- Best implementation model for this project:
+  - `manual structure mode` for guaranteed compatibility
+  - `dynamic mapping mode` for new layouts
+  - `mapping review mode` when confidence is low or required fields are ambiguous
+
 ## Restored Structure Workflow
 
 - Updated the upload parser so the legacy `mpaStructure.xlsx` header-swap workflow is now the primary path again.
