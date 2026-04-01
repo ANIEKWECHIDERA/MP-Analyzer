@@ -1,16 +1,15 @@
 import { Route, Routes } from "react-router-dom";
+import HistoryPage from "./pages/HistoryPage";
 import MainPage from "./pages/MainPage";
-import Login from "./pages/Login";
 
 const App = () => {
   return (
-    <>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<MainPage />} />
-      </Routes>
-    </>
+    <Routes>
+      <Route path="/" element={<MainPage />} />
+      <Route path="/history" element={<HistoryPage />} />
+    </Routes>
   );
 };
 
 export default App;
+
