@@ -5,10 +5,10 @@ import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getStoredProfile } from "@/lib/profile-session";
 import { getHistory } from "@/services/api";
 import type { HistoryItem, Profile } from "@/types/types";
-
-const STORAGE_KEY = "mp-analyzer.selected-profile";
 
 const HistoryPage: React.FC = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -19,15 +19,7 @@ const HistoryPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return;
-    }
-    try {
-      setProfile(JSON.parse(stored) as Profile);
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
+    setProfile(getStoredProfile());
   }, []);
 
   useEffect(() => {
@@ -66,11 +58,16 @@ const HistoryPage: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
-              Select or create a profile on the main page first so history can be scoped correctly.
+              Select a profile first so history can be scoped correctly.
             </p>
-            <Link to="/">
-              <Button>Back to Upload</Button>
-            </Link>
+            <div className="flex gap-3">
+              <Link to="/">
+                <Button>Back to Upload</Button>
+              </Link>
+              <Link to="/profiles/select">
+                <Button variant="outline">Select Profile</Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -87,9 +84,14 @@ const HistoryPage: React.FC = () => {
               Showing report runs for {profile.name}.
             </p>
           </div>
-          <Link to="/">
-            <Button variant="outline">Back to Upload</Button>
-          </Link>
+          <div className="flex gap-3">
+            <Link to="/">
+              <Button variant="outline">Back to Upload</Button>
+            </Link>
+            <Link to="/profiles/select">
+              <Button variant="outline">Change Profile</Button>
+            </Link>
+          </div>
         </div>
 
         <Card>
@@ -121,9 +123,15 @@ const HistoryPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <p className="text-muted-foreground">Loading history…</p>
+              <div className="space-y-3">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
             ) : items.length === 0 ? (
-              <p className="text-muted-foreground">No report runs found for this profile yet.</p>
+              <p className="text-muted-foreground">
+                No report runs found for this profile yet.
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -148,7 +156,7 @@ const HistoryPage: React.FC = () => {
                           {new Date(item.created_at).toLocaleString()}
                         </td>
                         <td className="px-2 py-3 text-muted-foreground">
-                          {item.error_message ?? "—"}
+                          {item.error_message ?? "-"}
                         </td>
                       </tr>
                     ))}
@@ -164,4 +172,3 @@ const HistoryPage: React.FC = () => {
 };
 
 export default HistoryPage;
-

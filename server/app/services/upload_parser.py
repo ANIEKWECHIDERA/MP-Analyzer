@@ -154,6 +154,10 @@ def _fallback_dataframe(path: str) -> tuple[pd.DataFrame, int]:
         uploaded = pd.read_csv(path, skiprows=5, header=None)
     else:
         uploaded = pd.read_excel(path, skiprows=5, header=None)
+    if len(structure_headers) != uploaded.shape[1]:
+        raise ValueError(
+            "Column count mismatch between uploaded file and structure template."
+        )
     dataframe = pd.DataFrame(data=uploaded.values, columns=structure_headers)
     dataframe.columns = [normalize_text(column) for column in dataframe.columns]
     return dataframe, 5
@@ -175,9 +179,10 @@ def _extract_zones(dataframe: pd.DataFrame) -> list[str]:
         return []
     return sorted(
         {
-            normalize_text(value)
+            cleaned
             for value in dataframe["ZONES"].tolist()
-            if normalize_text(value) and "total" not in normalize_text(value).lower()
+            if (cleaned := normalize_text(value))
+            and normalize_key(cleaned) != "zones"
         }
     )
 
@@ -195,19 +200,23 @@ def _detected_period_label(columns: list[str]) -> str | None:
 
 
 def parse_uploaded_workbook(path: str) -> ParsedWorkbook:
-    raw = _read_raw_table(path)
-    header_row_index = _detect_header_row(raw)
-    headers = _compose_headers(raw, header_row_index)
-    dataframe = raw.iloc[header_row_index + 1 :].reset_index(drop=True).copy()
-    dataframe.columns = headers
-    dataframe = dataframe.dropna(how="all")
-
-    if "ZONES" not in _resolve_mappings(list(dataframe.columns)):
+    try:
         dataframe, header_row_index = _fallback_dataframe(path)
         headers = list(dataframe.columns)
-
-    mapping = _resolve_mappings(list(dataframe.columns))
-    renamed = dataframe.rename(columns={raw_name: canonical for canonical, raw_name in mapping.items()}).copy()
+        mapping = {column: column for column in dataframe.columns}
+    except ValueError:
+        raw = _read_raw_table(path)
+        header_row_index = _detect_header_row(raw)
+        headers = _compose_headers(raw, header_row_index)
+        dataframe = raw.iloc[header_row_index + 1 :].reset_index(drop=True).copy()
+        dataframe.columns = headers
+        dataframe = dataframe.dropna(how="all")
+        mapping = _resolve_mappings(list(dataframe.columns))
+        renamed = dataframe.rename(
+            columns={raw_name: canonical for canonical, raw_name in mapping.items()}
+        ).copy()
+    else:
+        renamed = dataframe.copy()
 
     for column in renamed.columns:
         if column in {"ZONES", "BRANCHES"}:
@@ -224,4 +233,3 @@ def parse_uploaded_workbook(path: str) -> ParsedWorkbook:
         detected_period_label=_detected_period_label(headers),
         zones=_extract_zones(renamed),
     )
-

@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+
 import LoadingOverlay from "@/components/LoadingOverlay";
 import SubmitButton from "@/components/SubmitButton";
 import ZoneInput from "@/components/ZoneInput";
@@ -9,182 +12,196 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMainForm } from "@/hooks/useMainForm";
-import { FileSpreadsheet, History, UserRound } from "lucide-react";
-import { Link } from "react-router-dom";
+import { getStoredProfile } from "@/lib/profile-session";
+import type { Profile } from "@/types/types";
+import { CheckCircle2, FileSpreadsheet, History, UserRound } from "lucide-react";
 
 const MainPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    const stored = getStoredProfile();
+    if (!stored) {
+      navigate("/profiles/select");
+      return;
+    }
+    setSelectedProfile(stored);
+  }, [navigate]);
+
   const {
     file,
     zoneName,
     isLoading,
     isPreviewLoading,
     preview,
-    selectedProfile,
-    profileQuery,
-    matchingProfiles,
-    createName,
-    createEmail,
+    lastGenerated,
     handleFileChange,
     handleZoneChange,
     handleSubmit,
-    handleProfileQueryChange,
-    handleCreateNameChange,
-    handleCreateEmailChange,
-    createProfile,
-    selectProfileByName,
-  } = useMainForm();
+  } = useMainForm(selectedProfile?.id ?? 0);
+
+  if (!selectedProfile) {
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <Card className="mx-auto max-w-2xl">
+          <CardHeader>
+            <CardTitle>Loading profile...</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen bg-[linear-gradient(180deg,rgba(11,79,74,0.06),rgba(255,255,255,0))] p-4 md:p-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-semibold">MP Analyzer</h1>
+            <h1 className="text-3xl font-semibold text-teal-950">MP Analyzer</h1>
             <p className="text-muted-foreground">
-              Profile-aware MPR report generation with schema preview and zone suggestions.
+              Generate profile-scoped MPR reports with your prepared structure file.
             </p>
           </div>
-          <Link to="/history" className="inline-flex">
-            <Button variant="outline" className="gap-2">
-              <History className="h-4 w-4" />
-              View History
-            </Button>
-          </Link>
+          <div className="flex gap-3">
+            <Link to="/history" className="inline-flex">
+              <Button variant="outline" className="gap-2">
+                <History className="h-4 w-4" />
+                View History
+              </Button>
+            </Link>
+            <Link to="/profiles/select" className="inline-flex">
+              <Button variant="outline" className="gap-2">
+                <UserRound className="h-4 w-4" />
+                Change Profile
+              </Button>
+            </Link>
+          </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_1.4fr]">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UserRound className="h-5 w-5" />
-                Profile
-              </CardTitle>
-              <CardDescription>
-                Select an existing profile or create one. Name is required and email is optional.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Input
-                  list="profile-suggestions"
-                  placeholder="Search profiles by name"
-                  value={profileQuery}
-                  onChange={handleProfileQueryChange}
-                  onBlur={(event) => selectProfileByName(event.target.value)}
-                />
-                <datalist id="profile-suggestions">
-                  {matchingProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.name} />
-                  ))}
-                </datalist>
-                {selectedProfile ? (
-                  <p className="text-sm text-muted-foreground">
-                    Selected profile: <span className="font-medium text-foreground">{selectedProfile.name}</span>
-                    {selectedProfile.email ? ` (${selectedProfile.email})` : ""}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No profile selected yet.
-                  </p>
-                )}
-              </div>
+        <Card className="border-teal-100 shadow-sm">
+          <CardHeader>
+            <CardTitle>Current Profile</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="font-medium text-teal-950">{selectedProfile.name}</p>
+            <p className="text-sm text-muted-foreground">
+              {selectedProfile.email || "No email provided"}
+            </p>
+          </CardContent>
+        </Card>
 
-              <div className="space-y-2 rounded-lg border p-4">
-                <p className="text-sm font-medium">Create New Profile</p>
-                <Input
-                  placeholder="Name"
-                  value={createName}
-                  onChange={handleCreateNameChange}
-                />
-                <Input
-                  placeholder="Email (optional)"
-                  type="email"
-                  value={createEmail}
-                  onChange={handleCreateEmailChange}
-                />
-                <Button type="button" onClick={createProfile} className="w-full">
-                  Create Profile
-                </Button>
+        {lastGenerated ? (
+          <Card className="border-teal-200 bg-teal-50/80 shadow-sm">
+            <CardContent className="flex items-start gap-3 pt-6">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 text-teal-700" />
+              <div>
+                <p className="font-medium text-teal-950">
+                  Report generated successfully
+                </p>
+                <p className="text-sm text-teal-900">
+                  Zone: {lastGenerated.zoneName} | Source file: {lastGenerated.fileName}
+                </p>
+                <p className="text-sm text-teal-800">
+                  Generated at {new Date(lastGenerated.generatedAt).toLocaleString()}
+                </p>
               </div>
             </CardContent>
           </Card>
+        ) : null}
 
-          <Card className="relative">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5" />
-                Upload and Process
-              </CardTitle>
-              <CardDescription>
-                Upload the current MPR file, review the detected schema, then pick a zone from the file.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="rounded-md border bg-gray-50 p-4">
-                  <input
-                    id="file-input"
-                    type="file"
-                    onChange={handleFileChange}
-                    disabled={isLoading || isPreviewLoading}
-                    className="block w-full cursor-pointer rounded-lg text-sm file:mr-4 file:rounded-md file:bg-teal-800/25 file:px-4 file:py-2 file:font-medium file:text-teal-950 file:transition-all hover:file:bg-teal-900/50 hover:file:text-gray-50"
-                    title="Upload Excel or CSV file"
-                  />
-                </div>
+        <Card className="relative border-teal-100 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-teal-950">
+              <FileSpreadsheet className="h-5 w-5" />
+              Upload and Process
+            </CardTitle>
+            <CardDescription>
+              Upload the current MPR file, review the schema preview, and pick a zone from the file.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="rounded-md border bg-gray-50 p-4">
+                <input
+                  id="file-input"
+                  type="file"
+                  onChange={handleFileChange}
+                  disabled={isLoading || isPreviewLoading}
+                  className="block w-full cursor-pointer rounded-lg text-sm file:mr-4 file:rounded-md file:bg-teal-800/25 file:px-4 file:py-2 file:font-medium file:text-teal-950 file:transition-all hover:file:bg-teal-900/50 hover:file:text-gray-50"
+                  title="Upload Excel or CSV file"
+                />
+              </div>
 
-                {preview ? (
-                  <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-                    <p className="font-medium">Schema Preview</p>
-                    <p className="text-muted-foreground">
-                      Version: {preview.schema_version}
-                      {preview.detected_period_label
-                        ? ` • Period: ${preview.detected_period_label}`
-                        : ""}
-                    </p>
-                    <p className="text-muted-foreground">
-                      Header row detected at index {preview.header_row_index}. Zones found:{" "}
-                      {preview.zones.length}
-                    </p>
-                    {preview.missing_fields.length > 0 ? (
-                      <p className="mt-2 text-red-600">
-                        Missing mapped fields: {preview.missing_fields.join(", ")}
-                      </p>
-                    ) : (
-                      <p className="mt-2 text-emerald-700">Schema is ready for report generation.</p>
-                    )}
+              {isPreviewLoading ? (
+                <div className="space-y-3 rounded-lg border border-teal-100 bg-teal-50/50 p-4">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-4 w-64" />
+                  <Skeleton className="h-4 w-56" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
                   </div>
-                ) : null}
+                </div>
+              ) : preview ? (
+                <div className="rounded-lg border border-teal-100 bg-teal-50/50 p-4 text-sm">
+                  <p className="font-medium text-teal-950">Schema Preview</p>
+                  <p className="text-muted-foreground">
+                    Version: {preview.schema_version}
+                    {preview.detected_period_label
+                      ? ` | Period: ${preview.detected_period_label}`
+                      : ""}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Header row detected at index {preview.header_row_index}. Zones found:{" "}
+                    {preview.zones.length}
+                  </p>
+                  {preview.missing_fields.length > 0 ? (
+                    <p className="mt-2 text-red-600">
+                      Missing mapped fields: {preview.missing_fields.join(", ")}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-teal-700">
+                      Schema is ready for report generation.
+                    </p>
+                  )}
+                </div>
+              ) : null}
 
-                <ZoneInput
-                  value={zoneName}
-                  suggestions={preview?.zones ?? []}
-                  onChange={handleZoneChange}
-                  disabled={isLoading || isPreviewLoading || !file}
-                />
+              <ZoneInput
+                value={zoneName}
+                suggestions={preview?.zones ?? []}
+                onChange={handleZoneChange}
+                disabled={isLoading || isPreviewLoading || !file}
+              />
 
-                <SubmitButton
-                  isLoading={isLoading || isPreviewLoading}
-                  disabled={
-                    isLoading ||
-                    isPreviewLoading ||
-                    !file ||
-                    !zoneName.trim() ||
-                    !selectedProfile ||
-                    (preview ? !preview.ready : false)
-                  }
-                />
-              </form>
+              <SubmitButton
+                isLoading={isLoading || isPreviewLoading}
+                loadingLabel={
+                  isPreviewLoading ? "Profiling file..." : "Generating report..."
+                }
+                disabled={
+                  isLoading ||
+                  isPreviewLoading ||
+                  !file ||
+                  !zoneName.trim() ||
+                  (preview ? !preview.ready : false)
+                }
+              />
+            </form>
 
-              <LoadingOverlay isLoading={isLoading || isPreviewLoading} />
-            </CardContent>
-          </Card>
-        </div>
+            <LoadingOverlay isLoading={isLoading || isPreviewLoading} />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 };
 
 export default MainPage;
-

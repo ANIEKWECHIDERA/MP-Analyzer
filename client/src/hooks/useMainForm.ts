@@ -1,102 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Swal from "sweetalert2";
-import type { MainFormActions, MainFormState, Profile } from "@/types/types";
-import {
-  createProfile as createProfileRequest,
-  generateReport,
-  previewReport,
-  searchProfiles,
-} from "@/services/api";
 
-const SELECTED_PROFILE_STORAGE_KEY = "mp-analyzer.selected-profile";
+import { generateReport, previewReport } from "@/services/api";
+import type { MainFormActions, MainFormState } from "@/types/types";
 
-export const useMainForm = (): MainFormState & MainFormActions => {
+export const useMainForm = (
+  profileId: number
+): MainFormState & MainFormActions => {
   const [file, setFile] = useState<File | null>(null);
   const [zoneName, setZoneName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<MainFormState["preview"]>(null);
-  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
-  const [profileQuery, setProfileQuery] = useState("");
-  const [matchingProfiles, setMatchingProfiles] = useState<Profile[]>([]);
-  const [createName, setCreateName] = useState("");
-  const [createEmail, setCreateEmail] = useState("");
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(SELECTED_PROFILE_STORAGE_KEY);
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored) as Profile;
-      setSelectedProfile(parsed);
-      setProfileQuery(parsed.name);
-    } catch {
-      window.localStorage.removeItem(SELECTED_PROFILE_STORAGE_KEY);
-    }
-  }, []);
-
-  const persistProfile = (profile: Profile) => {
-    setSelectedProfile(profile);
-    setProfileQuery(profile.name);
-    window.localStorage.setItem(SELECTED_PROFILE_STORAGE_KEY, JSON.stringify(profile));
-  };
-
-  const handleProfileQueryChange = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const nextValue = e.target.value;
-    setProfileQuery(nextValue);
-    if (!nextValue.trim()) {
-      setMatchingProfiles([]);
-      return;
-    }
-    const profiles = await searchProfiles(nextValue.trim());
-    setMatchingProfiles(profiles);
-  };
-
-  const selectProfileByName = (name: string) => {
-    const matched = matchingProfiles.find(
-      (profile) => profile.name.toLowerCase() === name.trim().toLowerCase()
-    );
-    if (matched) {
-      persistProfile(matched);
-    }
-  };
-
-  const createProfile = async () => {
-    if (!createName.trim()) {
-      await Swal.fire({
-        icon: "warning",
-        title: "Name Required",
-        text: "Please enter a name to create a profile.",
-        confirmButtonColor: "#0b4f4a",
-      });
-      return;
-    }
-
-    try {
-      const created = await createProfileRequest({
-        name: createName.trim(),
-        email: createEmail.trim() || undefined,
-      });
-      persistProfile(created);
-      setCreateName("");
-      setCreateEmail("");
-      setMatchingProfiles((current) => [created, ...current]);
-      await Swal.fire({
-        icon: "success",
-        title: "Profile Ready",
-        text: `Profile '${created.name}' is now selected.`,
-        confirmButtonColor: "#0b4f4a",
-      });
-    } catch (error: any) {
-      await Swal.fire({
-        icon: "error",
-        title: "Profile Error",
-        text: error?.response?.data?.detail || "Unable to create the profile.",
-        confirmButtonColor: "#0b4f4a",
-      });
-    }
-  };
+  const [lastGenerated, setLastGenerated] =
+    useState<MainFormState["lastGenerated"]>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] ?? null;
@@ -166,16 +83,6 @@ export const useMainForm = (): MainFormState & MainFormActions => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedProfile) {
-      await Swal.fire({
-        icon: "warning",
-        title: "Profile Required",
-        text: "Select or create a profile before processing a report.",
-        confirmButtonColor: "#0b4f4a",
-      });
-      return;
-    }
-
     if (!file || !zoneName.trim()) {
       await Swal.fire({
         icon: "warning",
@@ -198,7 +105,7 @@ export const useMainForm = (): MainFormState & MainFormActions => {
 
     setIsLoading(true);
     try {
-      const response = await generateReport(file, zoneName.trim(), selectedProfile.id);
+      const response = await generateReport(file, zoneName.trim(), profileId);
       const blob = new Blob([response.data], {
         type: response.headers["content-type"] || "application/octet-stream",
       });
@@ -210,6 +117,12 @@ export const useMainForm = (): MainFormState & MainFormActions => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
+      setLastGenerated({
+        zoneName: zoneName.trim(),
+        fileName: file.name,
+        generatedAt: new Date().toISOString(),
+      });
 
       await Swal.fire({
         icon: "success",
@@ -247,19 +160,9 @@ export const useMainForm = (): MainFormState & MainFormActions => {
     isLoading,
     isPreviewLoading,
     preview,
-    selectedProfile,
-    profileQuery,
-    matchingProfiles,
-    createName,
-    createEmail,
+    lastGenerated,
     handleFileChange,
     handleZoneChange,
     handleSubmit,
-    handleProfileQueryChange,
-    handleCreateNameChange: (e) => setCreateName(e.target.value),
-    handleCreateEmailChange: (e) => setCreateEmail(e.target.value),
-    createProfile,
-    selectProfileByName,
   };
 };
-

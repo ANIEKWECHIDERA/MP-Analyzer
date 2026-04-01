@@ -53,22 +53,19 @@ export interface MainFormState {
   isLoading: boolean;
   isPreviewLoading: boolean;
   preview: SchemaPreview | null;
-  selectedProfile: Profile | null;
-  profileQuery: string;
-  matchingProfiles: Profile[];
-  createName: string;
-  createEmail: string;
+  lastGenerated: GeneratedReportSummary | null;
 }
 
 export interface MainFormActions {
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleZoneChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSubmit: (e: React.FormEvent) => Promise<void>;
-  handleProfileQueryChange: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
-  handleCreateNameChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleCreateEmailChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  createProfile: () => Promise<void>;
-  selectProfileByName: (name: string) => void;
+}
+
+export interface GeneratedReportSummary {
+  zoneName: string;
+  fileName: string;
+  generatedAt: string;
 }
 
 export interface LoadingOverlayProps {
@@ -78,6 +75,7 @@ export interface LoadingOverlayProps {
 export interface SubmitButtonProps {
   isLoading: boolean;
   disabled: boolean;
+  loadingLabel?: string;
 }
 
 export interface ZoneInputProps {
@@ -86,4 +84,3 @@ export interface ZoneInputProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   disabled: boolean;
 }
-

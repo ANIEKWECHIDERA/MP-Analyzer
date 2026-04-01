@@ -7,7 +7,11 @@ import type { SubmitButtonProps } from "@/types/types";
 /**
  * Submit button with loading animation.
  */
-const SubmitButton: React.FC<SubmitButtonProps> = ({ isLoading, disabled }) => {
+const SubmitButton: React.FC<SubmitButtonProps> = ({
+  isLoading,
+  disabled,
+  loadingLabel = "Processing...",
+}) => {
   return (
     <Button
       type="submit"
@@ -25,7 +29,7 @@ const SubmitButton: React.FC<SubmitButtonProps> = ({ isLoading, disabled }) => {
             className="flex items-center gap-2"
           >
             <Loader2 className="h-4 w-4 animate-spin" />
-            Processing...
+            {loadingLabel}
           </motion.div>
         ) : (
           <motion.div

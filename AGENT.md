@@ -49,11 +49,14 @@ The dominant business workflow is:
 ### Frontend
 
 - `client/src/services/api.ts`: Central API client for profiles, preview, history, and report generation.
-- `client/src/hooks/useMainForm.ts`: Main upload workflow with profile selection, preview loading, zone validation, and download handling.
-- `client/src/pages/MainPage.tsx`: Main profile-aware upload experience.
+- `client/src/hooks/useMainForm.ts`: Main upload workflow for the selected profile, including preview loading, zone validation, download handling, and immediate success-state updates.
+- `client/src/lib/profile-session.ts`: Local storage helpers for the active profile session.
+- `client/src/pages/MainPage.tsx`: Main app experience for report generation under the selected profile.
 - `client/src/pages/HistoryPage.tsx`: User-scoped history UI with filters.
+- `client/src/pages/SelectProfilePage.tsx`: Existing-profile selection screen.
+- `client/src/pages/CreateProfilePage.tsx`: New-profile creation screen.
 - `client/src/components/ZoneInput.tsx`: Zone datalist suggestions sourced from the current uploaded file.
-- `client/src/App.tsx`: Routes now point to `/` and `/history`.
+- `client/src/App.tsx`: Routes now point to `/`, `/history`, `/profiles/select`, and `/profiles/new`.
 
 ## Implemented API Surface
 
@@ -73,6 +76,7 @@ The dominant business workflow is:
   - negative and parenthesized numeric values
   - multi-row header mapping
   - profile uniqueness behavior
+- Business rule locked in: accounting-style values in parentheses, for example `(35)`, are treated as negative values, for example `-35`.
 - 2026-04-01 re-run verification:
   - `..\.venv\Scripts\python.exe -m pytest` -> 3 passed
   - `npm run build` in `client/` -> passed
@@ -84,6 +88,50 @@ The dominant business workflow is:
 - Added `server/.env.example` as a copyable template for deployment and onboarding.
 - Added `client/.env` with a local `VITE_API_URL` pointing to the FastAPI server.
 - Added `client/.env.example` as a frontend environment template.
+
+## UI Loading States
+
+- Added shadcn `Skeleton` component via MCP-assisted registry command.
+- Applied more granular loading feedback across the frontend:
+  - profile search loading indicator
+  - profile creation loading button state
+  - schema preview skeleton while upload profiling runs
+  - explicit submit button labels for profiling vs report generation
+  - history page skeleton rows during refresh
+- Used current React guidance for explicit async pending UI in client components and kept the implementation in local component state.
+
+## Runtime Status
+
+- Backend started successfully with `uvicorn` on `http://127.0.0.1:8000`.
+- Verified the backend is responding with HTTP `200` on `/docs`.
+- 2026-04-01: Backend restarted cleanly after restoring the structure-first parser path and confirmed healthy on `/docs`.
+- 2026-04-01: Backend was restarted again after splitting the profile flow into separate screens and confirmed healthy on `/docs` with HTTP `200`.
+
+## Profile Flow Update
+
+- Split the frontend flow into three separate screens:
+  - `client/src/pages/SelectProfilePage.tsx`
+  - `client/src/pages/CreateProfilePage.tsx`
+  - `client/src/pages/MainPage.tsx`
+- Added `Change Profile` navigation on both the main app screen and the history screen.
+- The main app UI now updates immediately after a successful report generation by rendering an in-page success summary with the zone, source file name, and generation timestamp.
+- Rebuilt the frontend after the screen split and confirmed `npm run build` still passes.
+- Removed the extra profile-scoping helper copy from the main screen's current-profile card.
+- Updated the main screen styling to stay within the existing teal-centered visual theme instead of introducing a separate success color family.
+- Filtered the literal `ZONES` header value out of parsed zone suggestions so it never appears in the frontend list.
+
+## Restored Structure Workflow
+
+- Updated the upload parser so the legacy `mpaStructure.xlsx` header-swap workflow is now the primary path again.
+- The system now first:
+  - reads the tagged header row from `mpaStructure.xlsx`
+  - reads the uploaded workbook body with `skiprows=5`
+  - validates that the column counts match
+  - swaps the structure headers onto the uploaded body
+- Dynamic header inference remains as a secondary fallback only when the structure-based path cannot be used.
+- Zone suggestions now include zone rows such as `... Total`, matching the original processing workflow more closely.
+- Added a regression test proving the parser can reconstruct a report from a matching structure file plus uploaded body.
+- Verified the current `mpaStructure.xlsx` contains the expected tagged fields including `PBT 2025 YTD ACHVD`, `DDA Jul-25`, `SAV Jul-25`, `FD Jul-25`, and `DP Jul-25`.
 
 ## Database Defaults
 
@@ -114,9 +162,12 @@ The dominant business workflow is:
 - `client/components.json`: `shadcn/ui` style and alias configuration.
 - `client/src/main.tsx`: React bootstrap entry point.
 - `client/src/App.tsx`: Route registration.
-- `client/src/pages/MainPage.tsx`: Main upload screen.
-- `client/src/pages/Login.tsx`: Placeholder route with no implemented behavior.
-- `client/src/hooks/useMainForm.ts`: Core client workflow state, validation, API call, file download, and error handling.
+- `client/src/pages/MainPage.tsx`: Main application screen for report generation.
+- `client/src/pages/HistoryPage.tsx`: Profile-scoped report history screen.
+- `client/src/pages/SelectProfilePage.tsx`: Profile selection screen.
+- `client/src/pages/CreateProfilePage.tsx`: Profile creation screen.
+- `client/src/hooks/useMainForm.ts`: Core client workflow state for upload preview and report generation.
+- `client/src/lib/profile-session.ts`: Active-profile browser storage helper.
 - `client/src/components/`: Presentational UI components.
 - `client/src/components/ui/`: Reusable `shadcn/ui` primitives.
 - `client/src/types/types.ts`: Shared TypeScript interfaces for component props and hook contracts.
@@ -202,16 +253,23 @@ Bootstraps React and wraps the app in `BrowserRouter`.
 Defines application routes:
 
 - `/` -> `MainPage`
-- `/login` -> `Login`
+- `/history` -> `HistoryPage`
+- `/profiles/select` -> `SelectProfilePage`
+- `/profiles/new` -> `CreateProfilePage`
 
 #### `client/src/pages/MainPage.tsx`
 
-Main user-facing screen. It renders:
+Main report-generation screen for the selected profile. It renders:
 
+- current profile information
+- change-profile action
+- history navigation
 - file upload input
-- zone text input
+- schema preview state
+- zone text input with suggestions
 - submit button
 - loading overlay
+- immediate success feedback after a successful report generation
 
 It delegates all behavior to `useMainForm`.
 
@@ -219,12 +277,15 @@ It delegates all behavior to `useMainForm`.
 
 This is the most important client file. Responsibilities:
 
-- manages `file`, `zoneName`, and `isLoading` state
+- manages `file`, `zoneName`, preview state, loading state, and last successful generation state
 - validates selected file type
+- calls the preview endpoint after file selection
+- validates the zone against the parsed zone suggestions
 - builds `FormData`
 - calls backend using `axios.post`
 - expects binary response (`blob`)
 - triggers browser-side download
+- updates the UI immediately after success through `lastGenerated`
 - maps backend errors into user-friendly SweetAlert messages
 
 ### Backend
@@ -336,9 +397,11 @@ The user interacts with the form in `client/src/pages/MainPage.tsx`.
 
 In `client/src/hooks/useMainForm.ts`:
 
-- a `FormData` object is created
+- the selected file is previewed first to fetch schema readiness and zone suggestions
+- a `FormData` object is created for final generation
 - the selected file is appended as `file`
 - the zone text is appended as `zone_name`
+- the active profile id is appended as `profile_id`
 - `axios.post(API_URL, formData, { responseType: "blob" })` sends the request
 
 This means the frontend expects the backend to return a downloadable binary file, not JSON.
