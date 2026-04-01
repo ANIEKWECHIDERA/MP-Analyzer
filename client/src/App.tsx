@@ -1,15 +1,17 @@
 import { Route, Routes } from "react-router-dom";
+import CreateProfilePage from "./pages/CreateProfilePage";
+import HistoryPage from "./pages/HistoryPage";
 import MainPage from "./pages/MainPage";
-import Login from "./pages/Login";
+import SelectProfilePage from "./pages/SelectProfilePage";
 
 const App = () => {
   return (
-    <>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<MainPage />} />
-      </Routes>
-    </>
+    <Routes>
+      <Route path="/" element={<MainPage />} />
+      <Route path="/history" element={<HistoryPage />} />
+      <Route path="/profiles/select" element={<SelectProfilePage />} />
+      <Route path="/profiles/new" element={<CreateProfilePage />} />
+    </Routes>
   );
 };
 

@@ -1,181 +1,261 @@
-import { useState } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
-import type { MainFormState, MainFormActions } from "../types/types";
 
-const API_URL = import.meta.env.VITE_API_URL;
+import { generateReport, previewReport } from "@/services/api";
+import { clearUploadForProfile, loadUploadForProfile, saveUploadForProfile } from "@/lib/upload-session";
+import type { MainFormActions, MainFormState } from "@/types/types";
 
-// Custom hook for managing form state and submission logic
-export const useMainForm = (): MainFormState & MainFormActions => {
+const isSupportedFile = (file: File) => {
+  const fileName = file.name.toLowerCase();
+  return (
+    file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    file.type === "text/csv" ||
+    fileName.endsWith(".xlsx") ||
+    fileName.endsWith(".xls") ||
+    fileName.endsWith(".csv")
+  );
+};
+
+export const useMainForm = (
+  profileId: number
+): MainFormState & MainFormActions => {
   const [file, setFile] = useState<File | null>(null);
-  const [zoneName, setZoneName] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [fileName, setFileName] = useState("");
+  const [zoneName, setZoneName] = useState("");
+  const [selectedZones, setSelectedZones] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [preview, setPreview] = useState<MainFormState["preview"]>(null);
+  const [generatedReports, setGeneratedReports] = useState<
+    MainFormState["generatedReports"]
+  >([]);
 
-  // Handle file selection with validation for Excel/CSV types
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      const fileType = selectedFile.type;
-      const fileName = selectedFile.name.toLowerCase();
+  const resetUploadState = () => {
+    setFile(null);
+    setFileName("");
+    setPreview(null);
+    setZoneName("");
+    setSelectedZones([]);
+  };
 
-      if (
-        fileType ===
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-        fileType === "text/csv" ||
-        fileName.endsWith(".xlsx") ||
-        fileName.endsWith(".csv")
-      ) {
-        setFile(selectedFile);
-      } else {
-        Swal.fire({
-          icon: "error",
-          title: "Invalid File Type",
-          text: "Please select a valid Excel (.xlsx) or CSV (.csv) file.",
+  const runPreview = async (selectedFile: File, { silent = false } = {}) => {
+    setIsPreviewLoading(true);
+    try {
+      const nextPreview = await previewReport(selectedFile);
+      setPreview(nextPreview);
+      if (nextPreview.zones.length === 1) {
+        setZoneName(nextPreview.zones[0]);
+      }
+      if (!silent && nextPreview.missing_fields.length) {
+        await Swal.fire({
+          icon: "warning",
+          title: "Schema Review Needed",
+          text: `Missing mapped fields: ${nextPreview.missing_fields.join(", ")}`,
           confirmButtonColor: "#0b4f4a",
         });
       }
+      return nextPreview;
+    } finally {
+      setIsPreviewLoading(false);
     }
   };
 
-  // Handle zone name input change
-  const handleZoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setZoneName(e.target.value);
-  };
+  useEffect(() => {
+    let cancelled = false;
 
-  // Handle form submission: upload file and zone name, process, and download result
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    const restoreUpload = async () => {
+      if (!profileId) {
+        resetUploadState();
+        setGeneratedReports([]);
+        return;
+      }
 
-    if (!file || !zoneName.trim()) {
-      Swal.fire({
-        icon: "warning",
-        title: "Missing Information",
-        text: "Please select a file and enter a zone name.",
+      resetUploadState();
+      setGeneratedReports([]);
+      const storedFile = await loadUploadForProfile(profileId);
+      if (!storedFile || cancelled) {
+        return;
+      }
+
+      setFile(storedFile);
+      setFileName(storedFile.name);
+      try {
+        const nextPreview = await runPreview(storedFile, { silent: true });
+        if (!cancelled && nextPreview.zones.length === 1) {
+          setSelectedZones([nextPreview.zones[0]]);
+        }
+      } catch {
+        if (!cancelled) {
+          resetUploadState();
+          await clearUploadForProfile(profileId);
+        }
+      }
+    };
+
+    void restoreUpload();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profileId]);
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0] ?? null;
+    resetUploadState();
+
+    if (!selectedFile) {
+      return;
+    }
+
+    if (!isSupportedFile(selectedFile)) {
+      await Swal.fire({
+        icon: "error",
+        title: "Invalid File Type",
+        text: "Please select a valid Excel (.xlsx/.xls) or CSV (.csv) file.",
         confirmButtonColor: "#0b4f4a",
       });
       return;
     }
 
-    setIsLoading(true);
+    setFile(selectedFile);
+    setFileName(selectedFile.name);
+    setGeneratedReports([]);
+    await saveUploadForProfile(profileId, selectedFile);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("zone_name", zoneName.trim());
-      // console.log("FormData contents:");
-      // for (let [key, value] of formData.entries()) {
-      //   console.log(key, value);
-      // }
-
-      const response = await axios.post(API_URL, formData, {
-        responseType: "blob", // For file download
-      });
-
-      // Create blob and trigger download
-      const blob = new Blob([response.data], {
-        type: response.headers["content-type"] || "application/octet-stream",
-      });
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `processed_${zoneName}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      // Success notification
-      Swal.fire({
-        icon: "success",
-        title: "Success!",
-        text: "File processed and downloaded successfully.",
-        background: "##0b4f4a",
+      await runPreview(selectedFile);
+    } catch (error: any) {
+      resetUploadState();
+      await clearUploadForProfile(profileId);
+      await Swal.fire({
+        icon: "error",
+        title: "Preview Failed",
+        text:
+          error?.response?.data?.detail ||
+          "The upload could not be profiled for zones and schema preview.",
         confirmButtonColor: "#0b4f4a",
       });
+    }
+  };
 
-      // Reset form
-      // setFile(null);
-      // setZoneName("");
-      const fileInput = document.getElementById(
-        "file-input"
-      ) as HTMLInputElement | null;
-      if (fileInput) fileInput.value = "";
+  const handleZoneChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setZoneName(event.target.value);
+  };
 
-      Swal.fire({
+  const addZone = async () => {
+    const normalized = zoneName.trim();
+    if (!normalized) {
+      return;
+    }
+    if (preview && !preview.zones.includes(normalized)) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Invalid Zone",
+        text: "Select a zone from the uploaded file suggestions before adding it.",
+        confirmButtonColor: "#0b4f4a",
+      });
+      return;
+    }
+    setSelectedZones((current) =>
+      current.includes(normalized) ? current : [...current, normalized]
+    );
+    setZoneName("");
+  };
+
+  const removeZone = (nextZoneName: string) => {
+    setSelectedZones((current) => current.filter((zone) => zone !== nextZoneName));
+  };
+
+  const removeFile = async () => {
+    resetUploadState();
+    setGeneratedReports([]);
+    if (profileId) {
+      await clearUploadForProfile(profileId);
+    }
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const typedZone = zoneName.trim();
+    const zonesToGenerate = selectedZones.length > 0 ? selectedZones : typedZone ? [typedZone] : [];
+
+    if (!file || zonesToGenerate.length === 0) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Missing Information",
+        text: "Please select a file and add at least one zone.",
+        confirmButtonColor: "#0b4f4a",
+      });
+      return;
+    }
+
+    if (preview) {
+      const invalidZone = zonesToGenerate.find((zone) => !preview.zones.includes(zone));
+      if (invalidZone) {
+        await Swal.fire({
+          icon: "warning",
+          title: "Invalid Zone",
+          text: `${invalidZone} is not available in the uploaded file suggestions.`,
+          confirmButtonColor: "#0b4f4a",
+        });
+        return;
+      }
+    }
+
+    setIsLoading(true);
+    const successfulReports: MainFormState["generatedReports"] = [];
+
+    try {
+      for (const nextZone of zonesToGenerate) {
+        const response = await generateReport(file, nextZone, profileId);
+        const blob = new Blob([response.data], {
+          type: response.headers["content-type"] || "application/octet-stream",
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `processed_${nextZone}.docx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        const generated = {
+          zoneName: nextZone,
+          fileName: file.name,
+          generatedAt: new Date().toISOString(),
+        };
+        successfulReports.push(generated);
+        setGeneratedReports((current) => [generated, ...current]);
+      }
+
+      await Swal.fire({
         icon: "success",
-        title: "File Processed",
-        text: "Your report has been downloaded successfully!",
+        title: "Report Ready",
+        text:
+          successfulReports.length === 1
+            ? "The report was processed and downloaded successfully."
+            : `${successfulReports.length} reports were processed and downloaded successfully.`,
         confirmButtonColor: "#0b4f4a",
       });
     } catch (error: any) {
-      let errorMessage =
-        "There was an error processing your file. Please try again.";
-      let errorTitle = "Upload Failed";
-
-      if (error.response) {
-        // If the error response data is a Blob, read and parse it
-        if (error.response.data instanceof Blob) {
-          try {
-            const text = await error.response.data.text(); // Blob to text
-            const json = JSON.parse(text); // parse JSON
-
-            if (json.detail) {
-              errorMessage = json.detail;
-            }
-          } catch {
-            errorMessage = "Failed to parse error details from the server.";
-          }
-        } else if (error.response.data && error.response.data.detail) {
-          // If already parsed JSON (unlikely with responseType blob)
-          errorMessage = error.response.data.detail;
+      let message = "There was an error processing your file. Please try again.";
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          message = json.detail || message;
+        } catch {
+          message = "Failed to parse the server error response.";
         }
-
-        // Set errorTitle & other messages based on status code
-        switch (error.response.status) {
-          case 404:
-            errorTitle = "Zone Not Found";
-            errorMessage = `No data found for zone '${zoneName}'. Please check the zone name or try another zone.`;
-            break;
-          case 400:
-            errorTitle = "Upload Failed";
-            // errorMessage is already set from parsed detail or default
-            break;
-          case 500:
-            errorTitle = "Server Error";
-            errorMessage =
-              "The template file may be missing or there was an issue processing the data.";
-            break;
-          case 422:
-            errorTitle = "Invalid Request";
-            errorMessage =
-              "Please ensure the file and zone name are correctly specified.";
-            break;
-          default:
-            errorTitle = `Error ${error.response.status}`;
-            errorMessage = `Unexpected error occurred. Please try again or contact support.`;
-            break;
-        }
-      } else if (error.code === "ERR_NETWORK") {
-        errorTitle = "Network Error";
-        errorMessage =
-          "Ensure the backend server is running and the URL is correct.";
-      } else if (error.message.includes("Unexpected file type")) {
-        errorTitle = "File Type Error";
-        errorMessage =
-          "The server returned an unexpected file type. Expected a Word document (.docx).";
+      } else if (error?.response?.data?.detail) {
+        message = error.response.data.detail;
       }
-
-      // Reset file input (optional)
-      const fileInput = document.getElementById(
-        "file-input"
-      ) as HTMLInputElement | null;
-      if (fileInput) fileInput.value = "";
-
-      Swal.fire({
+      await Swal.fire({
         icon: "error",
-        title: errorTitle,
-        text: errorMessage,
+        title: "Processing Failed",
+        text: message,
         confirmButtonColor: "#0b4f4a",
       });
     } finally {
@@ -185,10 +265,18 @@ export const useMainForm = (): MainFormState & MainFormActions => {
 
   return {
     file,
+    fileName,
     zoneName,
+    selectedZones,
     isLoading,
+    isPreviewLoading,
+    preview,
+    generatedReports,
     handleFileChange,
     handleZoneChange,
+    addZone,
+    removeZone,
+    removeFile,
     handleSubmit,
   };
 };
