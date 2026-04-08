@@ -321,6 +321,17 @@ def _format_ratio_percentage(value: Decimal | None) -> str:
     return f"{numeric:.0f}"
 
 
+def _format_magnitude_millions(value: Decimal | None) -> str:
+    return format_millions(abs(value or Decimal("0")))
+
+
+def _format_zero_safe_millions(value: Decimal | None) -> str:
+    numeric = value or Decimal("0")
+    if numeric == 0:
+        return "0.00"
+    return format_millions(numeric)
+
+
 def _zone_rows(dataframe: pd.DataFrame, zone_name: str) -> pd.DataFrame:
     normalized_zone = normalize_text(zone_name).lower()
     filtered = dataframe[
@@ -511,7 +522,7 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
         "TRA_summary": f"The Zone recorded a loan to Deposit Ratio of {format_percentage(tra_ratio)}% in the current period",
         "AB_value1": format_millions(value("AB Jun-25")),
         "AB_value2": format_millions(value("AB Jul-25")),
-        "AB_value3": format_millions(value("AB VAR")),
+        "AB_value3": _format_magnitude_millions(value("AB VAR")),
         "AB_summary": "Insert AB Summary Here",
         "AO_value1": f"{value('AO C/A Opened - Funded'):,.0f}",
         "AO_value2": f"{value('AO S/A Opened - Funded'):,.0f}",
@@ -536,10 +547,10 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
         "POS_value3": f"{value('POS NEWLY DEPLOYED'):,.0f}",
         "POS_value4": f"{value('POS RETRIEVED'):,.0f}",
         "POS_summary": "Insert POS Summary Here",
-        "NXP_value1": format_millions(value("NXP May-25")),
-        "NXP_value2": format_millions(value("NXP Jun-25")),
-        "NXP_value3": format_millions(value("NXP Jul-25")),
-        "NXP_value4": format_millions(value("NXP YOY VAR")),
+        "NXP_value1": _format_zero_safe_millions(value("NXP May-25")),
+        "NXP_value2": _format_zero_safe_millions(value("NXP Jun-25")),
+        "NXP_value3": _format_zero_safe_millions(value("NXP Jul-25")),
+        "NXP_value4": _format_magnitude_millions(value("NXP YOY VAR")),
         "DMT_ACT_value1": f"{value('TOTAL_DMT_ACT'):,.0f}",
         "DMT_ACT_value2": f"{value('No. Reactivated DMT_ACT'):,.0f}",
         "DMT_ACT_value3": format_percentage(value("% Reactivated DMT_ACT")),

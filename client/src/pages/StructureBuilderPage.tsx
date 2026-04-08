@@ -53,11 +53,11 @@ const StructureBuilderPage: React.FC = () => {
     if (!preview) {
       return [];
     }
+    const totalColumns = Math.max(preview.original_headers.length, editedHeaders.length);
     const query = headerSearch.trim().toLowerCase();
-    return editedHeaders
-      .map((header, index) => ({
+    return Array.from({ length: totalColumns }, (_, index) => ({
         index,
-        header,
+        header: editedHeaders[index] ?? "",
         original: preview.original_headers[index] || "unnamed",
       }))
       .filter((row) => {
@@ -297,6 +297,9 @@ const StructureBuilderPage: React.FC = () => {
                     Header row index: {preview.header_row_index} | Columns: {preview.header_count}
                     {preview.detected_period_label ? ` | Period: ${preview.detected_period_label}` : ""}
                   </p>
+                  <p className="mt-1 text-muted-foreground">
+                    All uploaded columns remain editable below, even when a tag suggestion is not available yet.
+                  </p>
                 </div>
 
                 <Card className="border-teal-100 bg-teal-50/40 shadow-none">
@@ -368,15 +371,22 @@ const StructureBuilderPage: React.FC = () => {
                 </div>
 
                 <div className="rounded-lg border border-teal-100 bg-white p-4">
-                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-teal-950">
-                    <Search className="h-4 w-4" />
-                    Search Editable Column Names
-                  </label>
-                  <Input
-                    value={headerSearch}
-                    onChange={(event) => setHeaderSearch(event.target.value)}
-                    placeholder="Type to filter original or editable headers..."
-                  />
+                  <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <label className="mb-2 flex items-center gap-2 text-sm font-medium text-teal-950">
+                        <Search className="h-4 w-4" />
+                        Search Editable Column Names
+                      </label>
+                      <Input
+                        value={headerSearch}
+                        onChange={(event) => setHeaderSearch(event.target.value)}
+                        placeholder="Type to filter original or editable headers..."
+                      />
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Showing {filteredRows.length} of {Math.max(preview.original_headers.length, editedHeaders.length)} columns
+                    </div>
+                  </div>
                 </div>
 
                 <div className="overflow-hidden rounded-lg border border-teal-100">

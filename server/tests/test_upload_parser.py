@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from app.config import settings
-from app.services.upload_parser import parse_uploaded_workbook
+from app.services.upload_parser import _resolve_manual_alias_mapping, parse_uploaded_workbook
 
 
 def test_upload_parser_prefers_structure_file_header_swap(tmp_path: Path) -> None:
@@ -130,3 +130,41 @@ def test_upload_parser_requires_manual_structure_match(tmp_path: Path) -> None:
             parse_uploaded_workbook(str(upload_path))
     finally:
         settings.fallback_structure_path = original_fallback
+
+
+def test_resolve_manual_alias_mapping_prefers_correct_manual_blocks() -> None:
+    headers = [
+        "ZONES",
+        "BRANCHES",
+        "PBT 2025 YTD ACHVD",
+        "PBT 2025 YTD ACHVD__2",
+        "DP May-25",
+        "DP Jun-25",
+        "DP Jul-25",
+        "DP May-25__2",
+        "DP Jun-25__2",
+        "DP YTD Variance",
+        "DP YTD Variance__2",
+        "TRA TOTAL RISK ASSETS 2025-07-01 00:00:00",
+        "TRA 2025-08-01 00:00:00__11",
+        "TRA 2025-09-01 00:00:00__11",
+        "TRA YTD Variance",
+        "TRA YTD Variance__2",
+        "AB VALUE 2025-09-01 00:00:00",
+        "AB `` 2025-07-01 00:00:00",
+        "AB 1000 VAR",
+    ]
+
+    mapping = _resolve_manual_alias_mapping(headers)
+
+    assert mapping["PBT 2025 YTD ACHVD"] == "PBT 2025 YTD ACHVD__2"
+    assert mapping["DP May-25"] == "DP May-25__2"
+    assert mapping["DP Jun-25"] == "DP Jun-25__2"
+    assert mapping["DP YTD Variance"] == "DP YTD Variance__2"
+    assert mapping["TRA May-25"] == "TRA TOTAL RISK ASSETS 2025-07-01 00:00:00"
+    assert mapping["TRA Jun-25"] == "TRA 2025-08-01 00:00:00__11"
+    assert mapping["TRA Jul-25"] == "TRA 2025-09-01 00:00:00__11"
+    assert mapping["TRA YTD Variance"] == "TRA YTD Variance__2"
+    assert mapping["AB Jun-25"] == "AB VALUE 2025-09-01 00:00:00"
+    assert mapping["AB Jul-25"] == "AB `` 2025-07-01 00:00:00"
+    assert mapping["AB VAR"] == "AB 1000 VAR"

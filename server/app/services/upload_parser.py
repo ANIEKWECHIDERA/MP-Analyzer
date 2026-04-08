@@ -433,6 +433,50 @@ def _load_template_headers(path: Path) -> list[str]:
     return [normalize_text(header) for header in pd.read_excel(path, nrows=0).columns.tolist()]
 
 
+def _duplicate_candidates(headers: list[str], canonical_name: str) -> list[str]:
+    return [header for header in headers if header == canonical_name or header.startswith(f"{canonical_name}__")]
+
+
+def _resolve_manual_alias_mapping(headers: list[str]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+
+    # When a manually prepared structure file contains duplicate tagged fields, the later
+    # occurrence is usually the active/current block the report should use.
+    for canonical_name in [
+        "PBT 2025 YTD ACHVD",
+        "DP May-25",
+        "DP Jun-25",
+        "DP Jul-25",
+        "DP YTD Variance",
+    ]:
+        candidates = _duplicate_candidates(headers, canonical_name)
+        if candidates:
+            mapping[canonical_name] = candidates[-1]
+
+    tra_anchor_index = next(
+        (index for index, header in enumerate(headers) if normalize_key(header).startswith("tra total risk assets")),
+        None,
+    )
+    if tra_anchor_index is not None and tra_anchor_index + 2 < len(headers):
+        mapping["TRA May-25"] = headers[tra_anchor_index]
+        mapping["TRA Jun-25"] = headers[tra_anchor_index + 1]
+        mapping["TRA Jul-25"] = headers[tra_anchor_index + 2]
+    tra_ytd_candidates = _duplicate_candidates(headers, "TRA YTD Variance")
+    if tra_ytd_candidates:
+        mapping["TRA YTD Variance"] = tra_ytd_candidates[-1]
+
+    ab_anchor_index = next(
+        (index for index, header in enumerate(headers) if normalize_key(header).startswith("ab value")),
+        None,
+    )
+    if ab_anchor_index is not None and ab_anchor_index + 2 < len(headers):
+        mapping["AB Jun-25"] = headers[ab_anchor_index]
+        mapping["AB Jul-25"] = headers[ab_anchor_index + 1]
+        mapping["AB VAR"] = headers[ab_anchor_index + 2]
+
+    return mapping
+
+
 def _aligned_template_mapping(upload_headers: list[str]) -> dict[str, str]:
     upload_signature = _signature_sequence(upload_headers)
     best_score = 0.0
@@ -585,6 +629,16 @@ def _parse_structure_workbook(path: str) -> tuple[pd.DataFrame, int, list[str], 
     dataframe, header_row_index, structure_source_path = _fallback_dataframe(path)
     headers = list(dataframe.columns)
     mapping = {column: column for column in dataframe.columns}
+    manual_alias_mapping = _resolve_manual_alias_mapping(headers)
+    if manual_alias_mapping:
+        for canonical_name, source_name in manual_alias_mapping.items():
+            if source_name in dataframe.columns:
+                dataframe[canonical_name] = dataframe[source_name]
+                mapping[canonical_name] = source_name
+        logger.info(
+            "[Parser] Manual structure alias corrections applied: %s.",
+            ", ".join(f"{canonical}->{source}" for canonical, source in manual_alias_mapping.items()),
+        )
     return dataframe.copy(), header_row_index, headers, mapping, structure_source_path
 
 

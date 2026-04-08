@@ -59,54 +59,47 @@ def parse_numeric(value: object) -> Decimal | None:
     return numeric
 
 
-def format_billions(value: object) -> str:
+def _format_scaled_number(value: Decimal) -> str:
+    rounded = value.quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+    if rounded == rounded.to_integral_value():
+        return f"{int(rounded):,}"
+    if rounded.quantize(Decimal("0.1"), rounding=ROUND_DOWN) == rounded:
+        return f"{rounded:.1f}"
+    return f"{rounded:.2f}"
+
+
+def _format_million_scaled(value: object) -> str:
     numeric = parse_numeric(value)
     if numeric is None:
-        return "0B"
+        return "0M"
     if numeric < 0:
-        return f"-{format_billions(abs(numeric))}"
-    if abs(numeric) < Decimal("1000"):
-        return f"{numeric:,.0f}M"
-    billions = (numeric / Decimal("1000")).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
-    if billions % 1 == 0:
-        return f"{int(billions)}B"
-    return f"{billions:.2f}B".rstrip("0").rstrip(".")
+        return f"-{_format_million_scaled(abs(numeric))}"
+    if numeric < Decimal("1000"):
+        return f"{_format_scaled_number(numeric)}M"
+    return f"{_format_scaled_number(numeric / Decimal('1000'))}B"
+
+
+def _format_thousand_scaled(value: object) -> str:
+    numeric = parse_numeric(value)
+    if numeric is None:
+        return "0K"
+    if numeric < 0:
+        return f"-{_format_thousand_scaled(abs(numeric))}"
+    if numeric < Decimal("1000"):
+        return f"{_format_scaled_number(numeric)}K"
+    return f"{_format_scaled_number(numeric / Decimal('1000'))}M"
+
+
+def format_billions(value: object) -> str:
+    return _format_million_scaled(value)
 
 
 def format_millions(value: object) -> str:
-    numeric = parse_numeric(value)
-    if numeric is None:
-        return "0M"
-    if numeric < 0:
-        return f"-{format_millions(abs(numeric))}"
-    if numeric >= Decimal("1000"):
-        millions = (numeric / Decimal("1000")).quantize(Decimal("0.1"), rounding=ROUND_DOWN)
-        return f"{millions:.2f}M".rstrip("0").rstrip(".")
-    if numeric >= Decimal("1"):
-        thousands = numeric.quantize(Decimal("0.1"), rounding=ROUND_DOWN)
-        return f"{thousands:.2f}K".rstrip("0").rstrip(".")
-    thousands = (numeric * Decimal("100")).quantize(Decimal("0.1"), rounding=ROUND_DOWN)
-    return f"{thousands:.2f}K".rstrip("0").rstrip(".")
+    return _format_thousand_scaled(value)
 
 
 def format_dp_millions(value: object) -> str:
-    numeric = parse_numeric(value)
-    if numeric is None:
-        return "0M"
-    if numeric < 0:
-        return f"-{format_dp_millions(abs(numeric))}"
-
-    actual = numeric * Decimal("1000000")
-    if actual == 0:
-        return "0M"
-    if actual >= Decimal("1000000000"):
-        billions = (actual / Decimal("1000000000")).quantize(Decimal("0.1"), rounding=ROUND_DOWN)
-        return f"{billions:.1f}".rstrip("0").rstrip(".") + "B"
-    if actual >= Decimal("1000000"):
-        millions = (actual / Decimal("1000000")).quantize(Decimal("0.1"), rounding=ROUND_DOWN)
-        return f"{millions:.1f}".rstrip("0").rstrip(".") + "M"
-    thousands = (actual / Decimal("1000")).quantize(Decimal("0.1"), rounding=ROUND_DOWN)
-    return f"{thousands:.1f}".rstrip("0").rstrip(".") + "K"
+    return _format_million_scaled(value)
 
 
 def format_percentage(value: object) -> str:

@@ -764,3 +764,124 @@ This document was produced by following these inspection steps:
 - Corrected the parser so the manual mode now uses only the configured active `server/mpaStructure.xlsx`.
 - If the active structure header count does not match the uploaded report body, the parser now fails immediately with an active-structure mismatch instead of silently switching to a sibling `mpaStructure*.xlsx` file.
 - Updated `server/app/services/reporting.py` so `ValueError` from workbook parsing becomes a clean HTTP `400` preview/generation error rather than a raw `500`.
+
+
+## 2026-04-08 Structure Builder Full Column Editing
+- Verified the August structure-preview pipeline returns all uploaded columns for manual editing:
+  - `header_count = 461`
+  - `original_headers` length = `461`
+  - `suggested_headers` length = `461`
+- Updated `client/src/pages/StructureBuilderPage.tsx` so the editable grid is built from the full maximum column count instead of assuming both header arrays are always identical in length.
+- Added explicit UI copy in the suggestion summary stating that every uploaded column remains editable even when no suggestion is available yet.
+- Added a visible `Showing X of Y columns` indicator beside the header search so it is clear the editor is not hiding unmapped columns unless the current search text filters them out.
+- Rebuilt the frontend successfully with `npm run build`.
+
+
+## 2026-04-08 Database Connection Clarification
+- Verified the temporary local history count came from `server/mp_analyzer_playwright.db`, which contains:
+  - `profiles = 2`
+  - `report_runs = 4`
+- Confirmed there is no MySQL dependency in this repo; the local database used during Playwright verification is SQLite.
+- Fixed `server/app/config.py` so the backend always loads `server/.env` via an absolute path, even when started from the repository root.
+- Verified the Supabase connection from the repository root after the config fix:
+  - `profiles = 1`
+  - `report_runs = 38`
+- Restarted the backend on `127.0.0.1:8000` against Supabase, replacing the temporary local SQLite-backed process.
+
+
+## 2026-04-08 Mystery Server Troubleshooting
+- Verified that `http://127.0.0.1:8000/profiles/1/history` was still responding even when the user believed no backend had been started.
+- Traced the listener with `netstat -ano` and found a local process bound to `127.0.0.1:8000`:
+  - PID `50192`
+  - process name `python3.11`
+  - start time `2026-04-08 10:56:45`
+- Identified the most recent server log sink in the repo as:
+  - `server/uvicorn8000-supabase.err.log`
+- Stopped PID `50192` and verified the endpoint no longer responds:
+  - `URLError [WinError 10061] No connection could be made because the target machine actively refused it`
+
+
+## 2026-04-08 September Abuja 07 Calibration
+- Used the September source workbook `SEPTEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx` together with the user-provided source-of-truth write-up `SEPT MPR_OSCAR (1).docx` to compare the manual structure path against the expected output for `Abuja 07 Total`.
+- Confirmed the drift was caused by ambiguous tagged columns in the active `mpaStructure.xlsx`, not by numeric formatting alone.
+- Root causes found in the manual structure file:
+  - duplicate `PBT 2025 YTD ACHVD` headers where the first occurrence pointed to an old historical year and the second occurrence held the real 2025 achieved value
+  - duplicate `DP` month and `DP YTD Variance` tags where the system was reading the wrong deposit block instead of the domiciliary deposit block used in the write-up
+  - `TRA May-25`, `TRA Jun-25`, `TRA Jul-25`, and `TRA YTD Variance` were tagged against the wrong TRA subsection instead of the `TRA TOTAL RISK ASSETS` block used in the write-up
+  - `AB Jun-25`, `AB Jul-25`, and `AB VAR` were mapped to the wrong agency-banking subsection instead of the value block used in the write-up
+- Fine-tuned `server/app/services/upload_parser.py` so the manual parser now applies alias corrections after the normal header swap:
+  - prefers the later duplicate for `PBT 2025 YTD ACHVD`
+  - prefers the later duplicate DP month/YTD columns
+  - aliases TRA month slots to the `TRA TOTAL RISK ASSETS` block
+  - aliases AB month/variance slots to the `AB VALUE` block
+- Fine-tuned `server/app/services/reporting.py` so write-up-facing presentation now matches the September reference document better:
+  - `AB VAR` is rendered as a magnitude for the write-up table
+  - `NXP YOY VAR` is rendered as a magnitude
+  - zero NXP monthly values render as `0.00`
+- Fixed `server/app/config.py` so relative `.env` overrides like `./mpaStructure.xlsx` and `./mpatemplate.docx` are resolved relative to `server/`, preventing silent path drift when the backend is started from the repository root.
+- Re-verified `Abuja 07 Total` after the calibration:
+  - `PBT`: `13.53B`, `43.17B`, `31`, `3.06B`, `9.88B`, `143`
+  - `DDA`: `58.25B`, `60.11B`, `66.19B`, `40`, `13.08B`
+  - `SAV`: `23.77B`, `23.83B`, `24.09B`, `44`, `1.36B`
+  - `FD`: `5.77B`, `5.06B`, `4.76B`, `35`, `2.97B`
+  - `DP`: `59.9M`, `59.8M`, `58M`, `160`, `35.9M`
+  - `TRA`: `5.62B`, `5.39B`, `5.63B`, `3`, `307M`
+  - `AB`: `297.70M`, `99.50M`, `198.20M`
+  - `NXP`: `0.00`, `0.00`, `0.00`, `554.50K`
+- Backend verification after the calibration:
+  - `pytest tests/test_upload_parser.py tests/test_reporting.py` passed from `server/`: `9 passed`
+
+
+## 2026-04-08 September Full Docx Audit
+- Ran a full comparison of every zone present in `SEPT MPR_OSCAR (1).docx` against the current manual-system output from `SEPTEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx`.
+- Confirmed the September write-up contains 8 zone sections and 112 tables:
+  - `ABUJA 07`
+  - `ABUJA 08`
+  - `ABUJA 09`
+  - `ABUJA 10`
+  - `COKER-TRADE FAIR`
+  - `IKEJA`
+  - `IKORODU 1`
+  - `IKORODU 2`
+- Found that the `.docx` does not keep the exact same table order for every zone, so later-zone comparisons had to be classified by table header meaning rather than by a fixed table index.
+- Full-audit findings after the Abuja 07 calibration:
+  - `ABUJA 07`: only presentation drift remained (`58.0M` in the write-up vs `58M` in the app)
+  - `ABUJA 08`: 3 mismatches, all in sign/format handling for DP and TRA YTD values
+  - `ABUJA 09`: 3 mismatches, including a sign issue on DDA YTD, DP formatting, and `NXP` zero display
+  - `ABUJA 10`: 2 mismatches, both sign handling on `FD`/`DP` YTD values
+  - `COKER-TRADE FAIR`: 6 mismatches, including sign handling plus `AB` magnitude formatting (`2.211B` vs `2211.20M`)
+  - `IKEJA`: 3 mismatches, all in `TRA` interpretation/sign handling and DP sign handling
+  - `IKORODU 1`: 12 mismatches, with the major remaining issue being that the write-up swaps `DDA` and `SAV` relative to the current system for this zone
+  - `IKORODU 2`: 3 mismatches, including sign handling and a `DMT_ACT_value3` mismatch where the write-up shows `227%` but the workbook row contains a normalized percentage value used by the app
+- Conclusion from the full audit:
+  - the Abuja 07 calibration generalized well for many core sections
+  - the biggest remaining system issues are:
+    - sign/presentation rules for YTD variance fields, which are not consistent with how the write-up chooses to display adverse variances
+    - a likely `DDA`/`SAV` label swap in the structure or write-up for `IKORODU 1`
+    - some write-up tables use billions notation where the app is still outputting millions notation for the same magnitude
+
+
+## 2026-04-08 Formatter Rule Update
+- Updated `server/app/services/normalization.py` to follow the new user-defined scaling rules:
+  - million-scaled columns (`N'm`, `$'m`) now use:
+    - `< 1000` as `M`
+    - `>= 1000` as `B`
+  - thousand-scaled columns (`$'000`) now use:
+    - `< 1000` as `K`
+    - `>= 1000` as `M`
+- Implemented a shared scaled-number formatter that:
+  - keeps up to 2 decimal places
+  - collapses exact integers to no decimal places
+  - keeps one decimal place only when the second decimal is zero
+  - uses truncation (`ROUND_DOWN`) to stay aligned with the provided examples such as `234,787 -> 234.78B`
+- `format_billions` and `format_dp_millions` now both follow the million-scaled rule.
+- `format_millions` now follows the thousand-scaled rule.
+- Added regression coverage in `server/tests/test_normalization.py` for the user examples:
+  - `1 -> 1M`
+  - `123 -> 123M`
+  - `1,234 -> 1.23B`
+  - `234,787 -> 234.78B`
+  - and the corresponding `$'000` examples for `K/M`
+- Updated `server/tests/test_reporting.py` to align magnitude formatting expectations with the new scaling rule.
+- Verified:
+  - `pytest tests/test_normalization.py tests/test_reporting.py` passed from `server/`: `9 passed`
