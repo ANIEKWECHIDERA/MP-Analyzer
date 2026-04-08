@@ -74,6 +74,8 @@ def _format_million_scaled(value: object) -> str:
         return "0M"
     if numeric < 0:
         return f"-{_format_million_scaled(abs(numeric))}"
+    if numeric < Decimal("1"):
+        return f"{_format_scaled_number(numeric * Decimal('1000'))}K"
     if numeric < Decimal("1000"):
         return f"{_format_scaled_number(numeric)}M"
     return f"{_format_scaled_number(numeric / Decimal('1000'))}B"
@@ -87,7 +89,9 @@ def _format_thousand_scaled(value: object) -> str:
         return f"-{_format_thousand_scaled(abs(numeric))}"
     if numeric < Decimal("1000"):
         return f"{_format_scaled_number(numeric)}K"
-    return f"{_format_scaled_number(numeric / Decimal('1000'))}M"
+    if numeric < Decimal("1000000"):
+        return f"{_format_scaled_number(numeric / Decimal('1000'))}M"
+    return f"{_format_scaled_number(numeric / Decimal('1000000'))}B"
 
 
 def format_billions(value: object) -> str:

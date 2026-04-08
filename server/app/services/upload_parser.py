@@ -474,6 +474,21 @@ def _resolve_manual_alias_mapping(headers: list[str]) -> dict[str, str]:
         mapping["AB Jul-25"] = headers[ab_anchor_index + 1]
         mapping["AB VAR"] = headers[ab_anchor_index + 2]
 
+    card_issued_indexes = [
+        index
+        for index, header in enumerate(headers)
+        if "cards" in normalize_key(header) and "cards issued" in normalize_key(header)
+    ]
+    if len(card_issued_indexes) >= 2:
+        first_index, second_index = card_issued_indexes[-2], card_issued_indexes[-1]
+        if second_index + 2 < len(headers):
+            mapping["CDS1 No. of Cards Issued"] = headers[first_index]
+            mapping["CDS1 ACTIVE"] = headers[first_index + 1]
+            mapping["CDS1 INACTIVE"] = headers[first_index + 2]
+            mapping["CDS2 No. of Cards Issued"] = headers[second_index]
+            mapping["CDS2 ACTIVE"] = headers[second_index + 1]
+            mapping["CDS2 INACTIVE"] = headers[second_index + 2]
+
     return mapping
 
 

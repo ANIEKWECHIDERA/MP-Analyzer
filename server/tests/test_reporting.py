@@ -5,6 +5,8 @@ import pytest
 from fastapi import HTTPException
 
 from app.services.reporting import (
+    _format_magnitude_billions,
+    _format_magnitude_dp,
     _format_magnitude_millions,
     _format_ratio_percentage,
     _format_zero_safe_millions,
@@ -42,3 +44,12 @@ def test_format_magnitude_millions_uses_absolute_value() -> None:
 
 def test_format_zero_safe_millions_preserves_plain_zero_display() -> None:
     assert _format_zero_safe_millions(Decimal("0")) == "0.00"
+
+
+def test_format_magnitude_billions_uses_absolute_value() -> None:
+    assert _format_magnitude_billions(Decimal("-3.174")) == "3.17M"
+    assert _format_magnitude_billions(Decimal("-2211.20")) == "2.21B"
+
+
+def test_format_magnitude_dp_uses_absolute_value() -> None:
+    assert _format_magnitude_dp(Decimal("-7.5")) == "7.5M"

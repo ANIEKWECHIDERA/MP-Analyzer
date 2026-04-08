@@ -168,3 +168,24 @@ def test_resolve_manual_alias_mapping_prefers_correct_manual_blocks() -> None:
     assert mapping["AB Jun-25"] == "AB VALUE 2025-09-01 00:00:00"
     assert mapping["AB Jul-25"] == "AB `` 2025-07-01 00:00:00"
     assert mapping["AB VAR"] == "AB 1000 VAR"
+
+
+def test_resolve_manual_alias_mapping_maps_card_blocks_to_cds_slots() -> None:
+    headers = [
+        "ZONES",
+        "AO 224 CARDS NOVEMBER No. of Cards Issued",
+        "AO 234 ACTIVE",
+        "AO 235 INACTIVE",
+        "AO 224 CARDS DECEMBER No. of Cards Issued",
+        "AO 234 ACTIVE__2",
+        "AO 235 INACTIVE__2",
+    ]
+
+    mapping = _resolve_manual_alias_mapping(headers)
+
+    assert mapping["CDS1 No. of Cards Issued"] == "AO 224 CARDS NOVEMBER No. of Cards Issued"
+    assert mapping["CDS1 ACTIVE"] == "AO 234 ACTIVE"
+    assert mapping["CDS1 INACTIVE"] == "AO 235 INACTIVE"
+    assert mapping["CDS2 No. of Cards Issued"] == "AO 224 CARDS DECEMBER No. of Cards Issued"
+    assert mapping["CDS2 ACTIVE"] == "AO 234 ACTIVE__2"
+    assert mapping["CDS2 INACTIVE"] == "AO 235 INACTIVE__2"

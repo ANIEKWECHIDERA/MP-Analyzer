@@ -885,3 +885,106 @@ This document was produced by following these inspection steps:
 - Updated `server/tests/test_reporting.py` to align magnitude formatting expectations with the new scaling rule.
 - Verified:
   - `pytest tests/test_normalization.py tests/test_reporting.py` passed from `server/`: `9 passed`
+
+
+## 2026-04-08 Sign And Plain-Count Clarifications Applied
+- Applied the new user clarification that plain-count sections should not use K/M/B formatting:
+  - `ACCOUNTS OPENED`
+  - `CARDS`
+  - `CHANNELS ENROLLED`
+  - `AGENTS ONBOARDED`
+  - `POS`
+- Confirmed the current reporting layer already renders those sections as plain comma-separated integers, so no code change was needed there.
+- Applied the user’s sign/presentation guidance to variance-style report outputs:
+  - `DDA_value5`
+  - `SAV_value5`
+  - `FD_value5`
+  - `DP_value5`
+  - `TRA_value5`
+  now render as magnitudes in the report context.
+- Kept `NXP` monthly zero values as `0.00`.
+- Added tests in `server/tests/test_reporting.py` for:
+  - absolute magnitude formatting for billion- and DP-scaled variance outputs
+  - zero-safe `NXP` formatting
+- Re-verified:
+  - `pytest tests/test_normalization.py tests/test_reporting.py` passed from `server/`: `11 passed`
+- Spot-checked September examples after the change:
+  - `ABUJA 08 Total`: `DP_value5 = 7.55M`, `TRA_value5 = 3.17B`
+  - `ABUJA 10 Total`: `FD_value5 = 2.2B`, `DP_value5 = 6.4M`
+  - `COKER-TRADE FAIR Total`: `DDA_value5 = 4.05B`, `DP_value5 = 0.37M`, `TRA_value5 = 251.28M`
+
+
+## 2026-04-08 Formatter Calibration Follow-Up
+- Refined the million-scaled formatter so values below `1M` now render in `K`:
+  - example: `0.3725 -> 372.5K`
+- Refined the thousand-scaled formatter so very large values can roll up to `B`:
+  - example: `2211279.746 -> 2.21B`
+- Corrected `AB` report values back to the thousand-scaled formatter after confirming the raw workbook values are in thousands, not millions.
+- Re-verified five workbook-driven September zones after the change:
+  - `ABUJA 07 Total`
+  - `ABUJA 08 Total`
+  - `ABUJA 10 Total`
+  - `COKER-TRADE FAIR Total`
+  - `IKORODU 1 Total`
+- Test status after the follow-up:
+  - `pytest tests/test_normalization.py tests/test_reporting.py` passed from `server/`: `11 passed`
+
+
+## 2026-04-08 Full Audit Rerun After Final Formatter Rules
+- Reran the full September `.docx` audit after applying:
+  - workbook-as-truth for `IKORODU 1` `DDA`/`SAV`
+  - `K/M/B` formatter corrections
+  - thousand-scale `AB` formatter with `B` rollover
+- The remaining mismatches now split into two categories:
+  - cosmetic precision/presentation drift
+  - a small set of real semantic mismatches
+- Cosmetic drift examples:
+  - `59.8M` vs `59.83M`
+  - `554.50K` vs `554.5K`
+  - `2.211B` vs `2.21B`
+  - `0.00` vs `0K`
+- Real semantic mismatches that remain:
+  - `IKEJA Total`: `TRA_value4` write-up shows `145`, app shows `1`
+  - `IKORODU 1 Total`: write-up still swaps `DDA` and `SAV` relative to the workbook, but the app now intentionally follows the workbook
+  - `IKORODU 2 Total`: `DMT_ACT_value3` write-up shows `227`, app shows workbook-driven `2`
+- Full-audit status after the rerun:
+  - all 8 zones still have at least one mismatch if exact string equality is enforced
+  - most remaining mismatches are now precision/style differences rather than wrong source-column extraction
+
+
+## 2026-04-08 December Structure Update And Audit
+- Confirmed the active structure was updated to `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx` via `server/mpaStructure.meta.json`.
+- Parsed `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx` successfully with:
+  - `period = Oct-25 to Dec-25`
+  - `missing_fields = []`
+  - `zones = 154`
+- Initial December generation failed because the new structure file exposed card blocks as:
+  - `AO 224 CARDS NOVEMBER No. of Cards Issued`
+  - `AO 234 ACTIVE`
+  - `AO 235 INACTIVE`
+  - `AO 224 CARDS DECEMBER No. of Cards Issued`
+  - `AO 234 ACTIVE__2`
+  - `AO 235 INACTIVE__2`
+  instead of the expected `CDS1` / `CDS2` tags.
+- Updated the manual alias resolver in `server/app/services/upload_parser.py` so the last two detected card blocks are mapped automatically to:
+  - `CDS1 No. of Cards Issued`
+  - `CDS1 ACTIVE`
+  - `CDS1 INACTIVE`
+  - `CDS2 No. of Cards Issued`
+  - `CDS2 ACTIVE`
+  - `CDS2 INACTIVE`
+- Added a regression test in `server/tests/test_upload_parser.py` for the December-style card block aliasing.
+- Verified the December report context now builds successfully for `ABUJA 07 Total`.
+- Ran a December full audit against `DECEMBER MPR - CORRECTED.docx`.
+- December audit result:
+  - no zone is yet a perfect exact-string match
+  - a large share of the remaining drift is still precision-only, e.g.:
+    - `59.4M` vs `59.49M`
+    - `3.70B` vs `3.7B`
+    - `554.50K` vs `554.5K`
+  - key real December semantic mismatches remain in:
+    - `IKEJA` where `SAV` and `FD` appear swapped between the workbook-driven app output and the corrected write-up
+    - `IKORODU 1` where `DDA` and `SAV` appear swapped
+    - `IKORODU 2` where `DMT_ACT_value3` differs materially (`148` in the write-up vs workbook-driven `1`)
+- Verification after the December alias fix:
+  - `pytest tests/test_upload_parser.py tests/test_reporting.py` passed from `server/`: `12 passed`

@@ -332,6 +332,14 @@ def _format_zero_safe_millions(value: Decimal | None) -> str:
     return format_millions(numeric)
 
 
+def _format_magnitude_billions(value: Decimal | None) -> str:
+    return format_billions(abs(value or Decimal("0")))
+
+
+def _format_magnitude_dp(value: Decimal | None) -> str:
+    return format_dp_millions(abs(value or Decimal("0")))
+
+
 def _zone_rows(dataframe: pd.DataFrame, zone_name: str) -> pd.DataFrame:
     normalized_zone = normalize_text(zone_name).lower()
     filtered = dataframe[
@@ -494,31 +502,31 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
         "DDA_value2": format_billions(value("DDA Jun-25")),
         "DDA_value3": format_billions(dda_jul),
         "DDA_value4": f"{((dda_jul / dda_budget) * Decimal('100')):,.0f}" if dda_budget else "0",
-        "DDA_value5": format_billions(value("DDA YTD Variance")),
+        "DDA_value5": _format_magnitude_billions(value("DDA YTD Variance")),
         "DDA_summary": "Insert DDA Summary Here",
         "SAV_value1": format_billions(value("SAV May-25")),
         "SAV_value2": format_billions(value("SAV Jun-25")),
         "SAV_value3": format_billions(sav_jul),
         "SAV_value4": f"{((sav_jul / sav_budget) * Decimal('100')):,.0f}" if sav_budget else "0",
-        "SAV_value5": format_billions(value("SAV YTD Variance")),
+        "SAV_value5": _format_magnitude_billions(value("SAV YTD Variance")),
         "SAV_summary": "Insert SAV Summary Here",
         "FD_value1": format_billions(value("FD May-25")),
         "FD_value2": format_billions(value("FD Jun-25")),
         "FD_value3": format_billions(fd_jul),
         "FD_value4": f"{((fd_jul / fd_budget) * Decimal('100')):,.0f}" if fd_budget else "0",
-        "FD_value5": format_billions(value("FD YTD Variance")),
+        "FD_value5": _format_magnitude_billions(value("FD YTD Variance")),
         "FD_summary": "Insert FD Summary Here",
         "DP_value1": format_dp_millions(value("DP May-25")),
         "DP_value2": format_dp_millions(value("DP Jun-25")),
         "DP_value3": format_dp_millions(dp_jul),
         "DP_value4": f"{((dp_jul / dp_budget) * Decimal('100')):,.0f}" if dp_budget else "0",
-        "DP_value5": format_dp_millions(value("DP YTD Variance")),
+        "DP_value5": _format_magnitude_dp(value("DP YTD Variance")),
         "DP_summary": "Insert DP Summary Here",
         "TRA_value1": format_billions(value("TRA May-25")),
         "TRA_value2": format_billions(value("TRA Jun-25")),
         "TRA_value3": format_billions(value("TRA Jul-25")),
         "TRA_value4": f"{((tra_ratio * Decimal('100')) if abs(tra_ratio) <= 1 else tra_ratio):,.0f}",
-        "TRA_value5": format_billions(value("TRA YTD Variance")),
+        "TRA_value5": _format_magnitude_billions(value("TRA YTD Variance")),
         "TRA_summary": f"The Zone recorded a loan to Deposit Ratio of {format_percentage(tra_ratio)}% in the current period",
         "AB_value1": format_millions(value("AB Jun-25")),
         "AB_value2": format_millions(value("AB Jul-25")),
