@@ -4,6 +4,8 @@ import type {
   Profile,
   ProfileCreateInput,
   SchemaPreview,
+  StructurePreview,
+  StructureUploadResponse,
 } from "@/types/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
@@ -59,5 +61,32 @@ export const getHistory = async (
       page_size: filters.pageSize || 10,
     },
   });
+  return response.data;
+};
+
+export const previewStructure = async (file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post<StructurePreview>("/structure/preview", formData);
+  return response.data;
+};
+
+export const saveStructure = async (headers: string[], displayName?: string | null) => {
+  const response = await api.post<StructureUploadResponse>("/structure/save", {
+    headers,
+    display_name: displayName || undefined,
+  });
+  return response.data;
+};
+
+export const uploadStructureFile = async (file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post<StructureUploadResponse>("/structure/upload", formData);
+  return response.data;
+};
+
+export const getStructureStatus = async () => {
+  const response = await api.get<StructureUploadResponse>("/structure/status");
   return response.data;
 };

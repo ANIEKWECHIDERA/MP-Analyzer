@@ -1,11 +1,26 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..schemas import PreviewResponse, ZoneSuggestionsResponse
-from ..services.reporting import cleanup_files, generate_report, preview_workbook, save_upload_to_temp
+from ..schemas import (
+    PreviewResponse,
+    StructurePreviewResponse,
+    StructureSaveRequest,
+    StructureUploadResponse,
+    ZoneSuggestionsResponse,
+)
+from ..services.reporting import (
+    cleanup_files,
+    generate_report,
+    get_structure_status,
+    preview_structure_from_report,
+    preview_workbook,
+    replace_structure_template,
+    save_structure_headers,
+    save_upload_to_temp,
+)
 
 router = APIRouter(tags=["reports"])
 
@@ -65,3 +80,26 @@ async def generate_report_route(
         filename=report_filename,
     )
 
+
+@router.post("/structure/upload", response_model=StructureUploadResponse)
+async def upload_structure_file(file: UploadFile = File(...)) -> StructureUploadResponse:
+    result = replace_structure_template(file)
+    return StructureUploadResponse(**result)
+
+
+@router.get("/structure/status", response_model=StructureUploadResponse)
+async def structure_status() -> StructureUploadResponse:
+    result = get_structure_status()
+    return StructureUploadResponse(**result)
+
+
+@router.post("/structure/preview", response_model=StructurePreviewResponse)
+async def preview_structure_file(file: UploadFile = File(...)) -> StructurePreviewResponse:
+    result = preview_structure_from_report(file)
+    return StructurePreviewResponse(**result)
+
+
+@router.post("/structure/save", response_model=StructureUploadResponse)
+async def save_structure_file(payload: StructureSaveRequest = Body(...)) -> StructureUploadResponse:
+    result = save_structure_headers(payload.headers, payload.display_name)
+    return StructureUploadResponse(**result)

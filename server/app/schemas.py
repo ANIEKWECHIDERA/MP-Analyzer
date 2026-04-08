@@ -52,3 +52,26 @@ class ZoneSuggestionsResponse(BaseModel):
 class PreviewResponse(ZoneSuggestionsResponse):
     ready: bool
     header_row_index: int
+
+
+class StructureUploadResponse(BaseModel):
+    filename: str
+    display_name: str
+    header_count: int
+    structure_path: str
+    backup_path: str | None = None
+    duplicate_headers_resolved: int = 0
+
+
+class StructurePreviewResponse(BaseModel):
+    header_row_index: int
+    detected_period_label: str | None = None
+    header_count: int
+    original_headers: list[str]
+    suggested_headers: list[str]
+    mapped_fields: dict[str, str]
+
+
+class StructureSaveRequest(BaseModel):
+    headers: list[str] = Field(min_length=1)
+    display_name: str | None = None

@@ -178,6 +178,37 @@ The dominant business workflow is:
   - `dynamic mapping mode` for new layouts
   - `mapping review mode` when confidence is low or required fields are ambiguous
 
+## Auto Structure Selection
+
+- Implemented a template-bank approach inside `server/app/services/upload_parser.py`.
+- The parser no longer depends on only one active `mpaStructure.xlsx` file.
+- It now scans all `mpaStructure*.xlsx` files in the server directory and automatically selects the best-matching structure template based on uploaded body column count.
+- Exact column-count matches are preferred first.
+- If no exact match exists, the parser can fall back to the nearest available structure template within a small tolerance instead of immediately failing with a mismatch error.
+- This removes the need to manually replace `mpaStructure.xlsx` for every recurring report variant that already matches one of the known structure profiles in the template bank.
+- The parser still reports the active detected period window from the uploaded workbook itself, for example `Oct-25 to Dec-25`.
+
+## Latest Workbook Verification
+
+- Verified against `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx`.
+- Direct parser result:
+  - `header_row_index = 5`
+  - `detected_period_label = Oct-25 to Dec-25`
+  - `missing_fields = []`
+- Verified that the parser still resolves report-critical fields including:
+  - `PBT 2025 YTD ACHVD`
+  - `DDA Jul-25`
+  - `SAV Jul-25`
+  - `FD Jul-25`
+  - `DP Jul-25`
+  - `TRA Jul-25`
+  - `AB Jul-25`
+- Verified the new auto-template behavior by intentionally pointing the configured fallback path at a wrong structure file while the parser still auto-selected the correct matching template from the template bank.
+- Added regression coverage in `server/tests/test_upload_parser.py` for automatic matching-template selection.
+- Live API validation with the December workbook succeeded:
+  - `POST /generate-report/preview` returned `200` with `ready = true`
+  - `POST /generate-report/` returned `200` and generated `ABIA_1_Report.docx`
+
 ## Restored Structure Workflow
 
 - Updated the upload parser so the legacy `mpaStructure.xlsx` header-swap workflow is now the primary path again.
@@ -610,3 +641,126 @@ This document was produced by following these inspection steps:
 - Backend application: `server/Main.py`
 - Backend structure schema: `server/mpaStructure.xlsx`
 - Backend output template: `server/mpatemplate.docx`
+
+## 2026-04-01 October Workbook Validation
+- Tested `OCT 2025 MPR DISTRIBUTION.xlsx` against the new parser.
+- Fixed `upload_parser` to accept `Path` inputs during direct analysis.
+- Added contextual header inheritance so block-style headers carry their family labels across adjacent month and variance columns.
+- Verified direct parsing now resolves required report fields for October without rebuilding `mpaStructure.xlsx`.
+- Live `/generate-report/preview` for the October workbook returned `ready=true`, `missing_fields=[]`, `period='Aug-25 to Oct-25'`, and `155` zones.
+- Added a regression test covering block-style header inference.
+- Live `/generate-report/` for the October workbook now returns `200` and a valid `.docx` payload for `Abia 1 Total`.
+- Remaining automation gap for this turn: Playwright MCP browser session could not be reopened because the browser backend reported the page/context was already closed.
+
+
+## 2026-04-02 October Report Verification
+- Verified the October workbook end to end using only zones whose names contain `Total`.
+- Sampling seed: `20260402`.
+- Randomly selected zones: `South-West 5 Total`, `Ilupeju 2 Total`, `North Central 3 Total`, `Delta 2 Total`, `Edo 3 Total`.
+- For each selected zone, generated a live report through `POST /generate-report/`.
+- Opened each returned `.docx` and checked that key rendered values from the source workbook appeared in the document text.
+- Verified title, PBT, DDA, SAV, FD, DP, TRA, AB, and dormant-account values for all 5 reports.
+- Result: all checks passed for all 5 randomly selected `Total` zones.
+
+
+- Verified `Ikorodu 2 Total` specifically with the October workbook.
+- Generated a live `IKORODU_2_Report.docx` through the running API.
+- Captured the full generated context, extracted the raw source-row values from the workbook, and inspected the rendered `.docx` paragraphs and tables.
+- Confirmed the generated report values align with the normalized source values for PBT, DDA, SAV, FD, DP, TRA, AB, AO, CDS, CE, AOB, POS, NXP, and dormant-account sections.
+
+
+## 2026-04-07 Manual Rollback
+- Reverted the core upload parser back to the manual `mpaStructure.xlsx` header-swap workflow as the only active parsing path.
+- `parse_uploaded_workbook()` now always reads the uploaded file body with `skiprows=5`, overlays the tagged structure headers, and fails fast on column-count mismatch.
+- Dynamic semantic inference is no longer part of the active core flow.
+- Updated parser tests to reflect manual-structure behavior, including an explicit mismatch failure test.
+
+
+## 2026-04-07 Cost To Income Calibration
+- Verified the December workbook row for `Abuja 07 Total` and confirmed `PBT Cost to Income Ratio = 1.6238883056509614`.
+- Fixed report formatting so cost-to-income ratios use a dedicated ratio formatter instead of the generic percentage formatter.
+- `Abuja 07 Total` now renders `162%` in the generated report instead of `2%`.
+- Added backend tests covering fractional ratios like `1.6238` and whole percentages like `93.72`.
+
+
+## 2026-04-07 Dynamic Parser Re-enabled
+- Restored the dynamic parser as the primary parsing path in `parse_uploaded_workbook()`.
+- The parser now tries semantic/header-based inference first and falls back to the manual `mpaStructure.xlsx` header-swap workflow only when required fields are missing.
+- Restored parser tests for direct mapped-header extraction and block-style header inference.
+- Kept the manual structure overlay fallback path intact for comparison and safety.
+
+
+## 2026-04-07 Manual Structure Endpoint
+- Reverted the active parser back to the manual `mpaStructure.xlsx` workflow only.
+- Added `POST /structure/upload` to upload and replace the active `mpaStructure.xlsx` file.
+- The endpoint validates that the uploaded file is an Excel workbook with headers, backs up the existing active structure file, and then activates the new one.
+- Added backend tests for structure replacement and non-Excel rejection.
+
+
+- Added a dedicated frontend structure-management page at `client/src/pages/StructureBuilderPage.tsx`.
+- The page supports:
+  - uploading a fresh report to preview suggested structure headers,
+  - editing every suggested header inline before saving,
+  - directly uploading a manually prepared structure file.
+- Added backend endpoints:
+  - `POST /structure/preview`
+  - `POST /structure/save`
+  - `POST /structure/upload`
+- Added an ellipsis menu on the main upload page to hide `View History` and `Upload Structure File` actions behind a compact menu.
+
+
+- Refined the Structure Builder UX:
+  - added active structure status display using the uploaded/display filename instead of the internal `mpaStructure.xlsx` name,
+  - added cancel buttons for both selected source-report files and direct structure uploads,
+  - added searchable editable column names once editable headers are available,
+  - added a confirmed-tag checklist for common structure tags,
+  - made the main-page ellipsis menu fully teal-themed.
+- Added `GET /structure/status` to fetch the active structure metadata.
+- Fixed duplicate edited-header save failures by auto-resolving duplicate names with suffixes during save instead of rejecting the request.
+
+
+- Grouped the Structure Builder checklist into `Confirmed` and `Still Missing` sections for easier scanning.
+- Restored the ellipsis menu to a white dropdown surface while keeping teal text and hover styling.
+
+
+## 2026-04-07 Backend Logging And August Debugging
+- Added staged backend logging in `server/app/services/upload_parser.py` and `server/app/services/reporting.py` so the manual parse flow now logs:
+  - upload/body read start and completion
+  - structure-template candidate selection
+  - exact or nearest structure-template choice
+  - header overlay completion
+  - parse completion with structure path, missing fields, and zone count
+  - report context build start/completion
+  - branch-metric processing
+  - template render start/completion
+  - cleanup start/completion
+- Added logging bootstrap in `server/app/main.py` using a consistent timestamped INFO format.
+- Fixed a manual-parser edge case where the active `server/mpaStructure.xlsx` could be ignored if another `mpaStructure*.xlsx` sibling had the same column count.
+- The parser now always prefers the configured active `mpaStructure.xlsx` first, then only falls back to sibling templates when the active structure does not match.
+- Added a regression test in `server/tests/test_upload_parser.py` to ensure the active structure file wins when multiple templates share the same column count.
+- Added a reporting validation test in `server/tests/test_reporting.py` to guarantee missing tagged columns raise a clear HTTP error instead of a raw `KeyError`.
+- Verified with `AUGUST ZONAL DISTRIBUTION FOR BRANCHES.xlsx` that the original `'PBT Cost to Income Ratio'` failure path is gone once the active structure is preferred.
+- Current August finding for `Abuja 07 Total`: the next blocking issue is now explicit and logged clearly as missing active-structure tags:
+  - `CDS2 ACTIVE`
+  - `CDS2 INACTIVE`
+  - `CDS2 No. of Cards Issued`
+
+
+## 2026-04-07 Log Readability And Structure Verification
+- Reworded backend logs in `server/app/services/upload_parser.py` and `server/app/services/reporting.py` into plain-English step markers such as:
+  - `[Parser] Step 1/4: Reading uploaded report body...`
+  - `[Parser] Step 2/4: Selecting structure template...`
+  - `[Report] Starting generation...`
+  - `[Structure] Active structure replaced successfully...`
+- Confirmed via Playwright on `http://localhost:5173` that the Structure Builder displays the active structure display name and can upload a direct structure file through the UI.
+- For Playwright verification, ran a local SQLite-backed backend on `127.0.0.1:8000` because the previously running Supabase-backed server process was hanging during startup and browser requests were stalling.
+- Browser-verified workflow:
+  - uploaded `AUGUST ZONAL DISTRIBUTION FOR BRANCHES.xlsx` as the active structure file
+  - confirmed the Structure Builder shows `AUGUST ZONAL DISTRIBUTION FOR BRANCHES.xlsx` as the active structure display name with `442` headers
+  - returned to the upload page and attempted to generate `Abuja 07 Total` from the same August workbook
+- Key finding from the browser run and backend logs:
+  - before the latest parser correction, the manual parser still fell through to sibling template `server/mpaStructure AUGUST.xlsx` because it had an exact 461-column match
+  - this proved the system was not strictly using the active `server/mpaStructure.xlsx` after a direct structure replacement
+- Corrected the parser so the manual mode now uses only the configured active `server/mpaStructure.xlsx`.
+- If the active structure header count does not match the uploaded report body, the parser now fails immediately with an active-structure mismatch instead of silently switching to a sibling `mpaStructure*.xlsx` file.
+- Updated `server/app/services/reporting.py` so `ValueError` from workbook parsing becomes a clean HTTP `400` preview/generation error rather than a raw `500`.

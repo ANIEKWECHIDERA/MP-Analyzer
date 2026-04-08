@@ -42,6 +42,24 @@ export interface SchemaPreview {
   header_row_index: number;
 }
 
+export interface StructurePreview {
+  header_row_index: number;
+  detected_period_label: string | null;
+  header_count: number;
+  original_headers: string[];
+  suggested_headers: string[];
+  mapped_fields: Record<string, string>;
+}
+
+export interface StructureUploadResponse {
+  filename: string;
+  display_name: string;
+  header_count: number;
+  structure_path: string;
+  backup_path: string | null;
+  duplicate_headers_resolved: number;
+}
+
 export interface ZoneSuggestionResponse {
   zones: string[];
   detected_period_label: string | null;
