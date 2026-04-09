@@ -988,3 +988,42 @@ This document was produced by following these inspection steps:
     - `IKORODU 2` where `DMT_ACT_value3` differs materially (`148` in the write-up vs workbook-driven `1`)
 - Verification after the December alias fix:
   - `pytest tests/test_upload_parser.py tests/test_reporting.py` passed from `server/`: `12 passed`
+
+
+## 2026-04-09 December Targeted Inspection
+- Inspected the December workbook directly for the three user-specified concern areas:
+  - `IKEJA SAV/FD`
+  - `IKORODU 1 DDA/SAV`
+  - `IKORODU 2 DMT_ACT_value3`
+- Findings:
+  - `IKEJA` workbook values show the app is correct:
+    - `SAV` rows in the workbook are `37.99B`, `37.75B`, `38.44B`, `8.66B`
+    - `FD` rows in the workbook are `44.65B`, `31.82B`, `21.21B`, `9.84B`
+    - the earlier mismatch came from the December write-up audit classifier, which assumed the larger of the two rolling blocks must be `SAV`; for `IKEJA`, `FD` is actually larger than `SAV`
+  - `IKORODU 1` workbook values also show the app is correct:
+    - `DDA` is `33.21B`, `34.92B`, `35.03B`, `4.83B`
+    - `SAV` is `36.79B`, `37.68B`, `38.62B`, `5.67B`
+    - the earlier mismatch again came from the write-up table classifier rather than the report extraction
+  - `IKORODU 2 DMT_ACT_value3` is a real app issue:
+    - workbook raw `% Reactivated DMT_ACT = 1.483652843719201`
+    - corrected write-up shows `148%`
+    - current app output is `1` because `format_percentage()` only multiplies by 100 when the value is `<= 1`
+- Conclusion:
+  - `IKEJA SAV/FD` is not a workbook-mapping bug
+  - `IKORODU 1 DDA/SAV` is not a workbook-mapping bug
+  - `IKORODU 2 DMT_ACT_value3` is a real percentage-scaling bug in the reporting layer
+
+
+## 2026-04-09 December DMT Reactivation Fix
+- Added a dedicated `_format_reactivated_percentage()` helper in `server/app/services/reporting.py`.
+- Switched `DMT_ACT_value3` to use the dedicated reactivation formatter instead of the generic `format_percentage()`.
+- The new rule treats `% Reactivated DMT_ACT` as a ratio-like field whenever the absolute value is below `10`, so:
+  - `0.079748... -> 8`
+  - `1.483652... -> 148`
+- Added regression coverage in `server/tests/test_reporting.py` for both cases.
+- Verified for `IKORODU 2 Total` in the December workbook:
+  - `DMT_ACT_value1 = 11,512`
+  - `DMT_ACT_value2 = 172`
+  - `DMT_ACT_value3 = 148`
+- Verification:
+  - `pytest tests/test_reporting.py` passed from `server/`: `8 passed`

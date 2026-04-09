@@ -8,6 +8,7 @@ from app.services.reporting import (
     _format_magnitude_billions,
     _format_magnitude_dp,
     _format_magnitude_millions,
+    _format_reactivated_percentage,
     _format_ratio_percentage,
     _format_zero_safe_millions,
     _validate_report_columns,
@@ -53,3 +54,8 @@ def test_format_magnitude_billions_uses_absolute_value() -> None:
 
 def test_format_magnitude_dp_uses_absolute_value() -> None:
     assert _format_magnitude_dp(Decimal("-7.5")) == "7.5M"
+
+
+def test_format_reactivated_percentage_handles_fraction_and_over_one_ratio() -> None:
+    assert _format_reactivated_percentage(Decimal("0.07974896776892915")) == "8"
+    assert _format_reactivated_percentage(Decimal("1.483652843719201")) == "148"

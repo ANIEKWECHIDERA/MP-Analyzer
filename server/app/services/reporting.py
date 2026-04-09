@@ -340,6 +340,15 @@ def _format_magnitude_dp(value: Decimal | None) -> str:
     return format_dp_millions(abs(value or Decimal("0")))
 
 
+def _format_reactivated_percentage(value: Decimal | None) -> str:
+    if value is None:
+        return "0"
+    numeric = value
+    if abs(numeric) < Decimal("10"):
+        numeric = numeric * Decimal("100")
+    return f"{numeric:.0f}"
+
+
 def _zone_rows(dataframe: pd.DataFrame, zone_name: str) -> pd.DataFrame:
     normalized_zone = normalize_text(zone_name).lower()
     filtered = dataframe[
@@ -561,7 +570,7 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
         "NXP_value4": _format_magnitude_millions(value("NXP YOY VAR")),
         "DMT_ACT_value1": f"{value('TOTAL_DMT_ACT'):,.0f}",
         "DMT_ACT_value2": f"{value('No. Reactivated DMT_ACT'):,.0f}",
-        "DMT_ACT_value3": format_percentage(value("% Reactivated DMT_ACT")),
+        "DMT_ACT_value3": _format_reactivated_percentage(value("% Reactivated DMT_ACT")),
         **branch_data,
     }
     logger.info("[Report] Template context complete for '%s' (%s values).", zone_name, len(context))
