@@ -5,20 +5,21 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+
+
 class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://postgres:YOUR_SUPABASE_PASSWORD@"
         "YOUR_SUPABASE_HOST:6543/postgres"
     )
     cors_origins: str = "*"
-    template_path: str = str(Path(__file__).resolve().parents[1] / "mpatemplate.docx")
-    fallback_structure_path: str = str(
-        Path(__file__).resolve().parents[1] / "mpaStructure.xlsx"
-    )
+    template_path: str = str(BASE_DIR / "mpatemplate.docx")
+    fallback_structure_path: str = str(BASE_DIR / "mpaStructure.xlsx")
     schema_version: str = "v1"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
@@ -47,6 +48,14 @@ class Settings(BaseSettings):
                 )
             )
         return normalized
+
+    @field_validator("template_path", "fallback_structure_path", mode="before")
+    @classmethod
+    def resolve_relative_paths(cls, value: str) -> str:
+        candidate = Path(str(value).strip().strip("\"'"))
+        if candidate.is_absolute():
+            return str(candidate)
+        return str((BASE_DIR / candidate).resolve())
 
 
 settings = Settings()

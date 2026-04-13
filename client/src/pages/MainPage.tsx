@@ -16,11 +16,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMainForm } from "@/hooks/useMainForm";
 import { getStoredProfile } from "@/lib/profile-session";
 import type { Profile } from "@/types/types";
-import { CheckCircle2, FileSpreadsheet, History, Plus, UserRound, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Ellipsis,
+  FileSpreadsheet,
+  History,
+  Plus,
+  Upload,
+  UserRound,
+  X,
+} from "lucide-react";
 
 const MainPage: React.FC = () => {
   const navigate = useNavigate();
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const stored = getStoredProfile();
@@ -69,24 +79,60 @@ const MainPage: React.FC = () => {
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-semibold text-teal-950">MP Analyzer</h1>
+            <h1 className="text-3xl font-semibold text-teal-950">
+              MP Analyzer
+            </h1>
             <p className="text-muted-foreground">
-              Generate profile-scoped MPR reports with your prepared structure file.
+              Generate profile-scoped MPR reports with your prepared structure
+              file.
             </p>
           </div>
           <div className="flex gap-3">
-            <Link to="/history" className="inline-flex">
-              <Button variant="outline" className="gap-2 border-teal-200 text-teal-900 hover:bg-teal-50">
-                <History className="h-4 w-4" />
-                View History
-              </Button>
-            </Link>
             <Link to="/profiles/select" className="inline-flex">
-              <Button variant="outline" className="gap-2 border-teal-200 text-teal-900 hover:bg-teal-50">
+              <Button
+                variant="outline"
+                className="gap-2 border-teal-200 text-teal-900 hover:bg-teal-50"
+              >
                 <UserRound className="h-4 w-4" />
                 Change Profile
               </Button>
             </Link>
+            <div className="relative">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="border-teal-200 text-teal-900 hover:bg-teal-50"
+                onClick={() => setMenuOpen((current) => !current)}
+                aria-label="More actions"
+              >
+                <Ellipsis className="h-4 w-4" />
+              </Button>
+              {menuOpen ? (
+                <div className="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-teal-100 bg-white p-2 shadow-lg">
+                  <Link
+                    to="/history"
+                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-teal-950 transition-colors hover:bg-teal-50"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <span>
+                      <History className="h-4 w-4 text-teal-950" />
+                    </span>
+                    <p className="text-teal-950">View History</p>
+                  </Link>
+                  <Link
+                    to="/structure"
+                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-teal-950 transition-colors hover:bg-teal-50"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <span>
+                      <Upload className="h-4 w-4 text-teal-950" />
+                    </span>
+                    <p className="text-teal-950">Upload Structure File</p>
+                  </Link>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -113,7 +159,8 @@ const MainPage: React.FC = () => {
                 <div className="mt-2 space-y-1 text-sm text-teal-900">
                   {generatedReports.slice(0, 5).map((report) => (
                     <p key={`${report.zoneName}-${report.generatedAt}`}>
-                      Zone: {report.zoneName} | Source file: {report.fileName} | Generated at{" "}
+                      Zone: {report.zoneName} | Source file: {report.fileName} |
+                      Generated at{" "}
                       {new Date(report.generatedAt).toLocaleString()}
                     </p>
                   ))}
@@ -130,7 +177,8 @@ const MainPage: React.FC = () => {
               Upload and Process
             </CardTitle>
             <CardDescription>
-              Upload the current MPR file, review the schema preview, and pick a zone from the file.
+              Upload the current MPR file, review the schema preview, and pick a
+              zone from the file.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -138,7 +186,9 @@ const MainPage: React.FC = () => {
               {file ? (
                 <div className="flex items-center justify-between rounded-md border border-teal-100 bg-teal-50/50 p-4">
                   <div>
-                    <p className="text-sm font-medium text-teal-950">Current upload</p>
+                    <p className="text-sm font-medium text-teal-950">
+                      Current upload
+                    </p>
                     <p className="text-sm text-teal-800">{fileName}</p>
                   </div>
                   <Button
@@ -186,8 +236,8 @@ const MainPage: React.FC = () => {
                       : ""}
                   </p>
                   <p className="text-muted-foreground">
-                    Header row detected at index {preview.header_row_index}. Zones found:{" "}
-                    {preview.zones.length}
+                    Header row detected at index {preview.header_row_index}.
+                    Zones found: {preview.zones.length}
                   </p>
                   {preview.missing_fields.length > 0 ? (
                     <p className="mt-2 text-red-600">
@@ -240,7 +290,8 @@ const MainPage: React.FC = () => {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Add one or more zones, or generate directly from the typed zone.
+                    Add one or more zones, or generate directly from the typed
+                    zone.
                   </p>
                 )}
               </div>
@@ -248,7 +299,9 @@ const MainPage: React.FC = () => {
               <SubmitButton
                 isLoading={isLoading || isPreviewLoading}
                 loadingLabel={
-                  isPreviewLoading ? "Profiling file..." : "Generating report..."
+                  isPreviewLoading
+                    ? "Profiling file..."
+                    : "Generating report..."
                 }
                 disabled={
                   isLoading ||

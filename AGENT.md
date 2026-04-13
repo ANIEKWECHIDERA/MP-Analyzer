@@ -178,6 +178,37 @@ The dominant business workflow is:
   - `dynamic mapping mode` for new layouts
   - `mapping review mode` when confidence is low or required fields are ambiguous
 
+## Auto Structure Selection
+
+- Implemented a template-bank approach inside `server/app/services/upload_parser.py`.
+- The parser no longer depends on only one active `mpaStructure.xlsx` file.
+- It now scans all `mpaStructure*.xlsx` files in the server directory and automatically selects the best-matching structure template based on uploaded body column count.
+- Exact column-count matches are preferred first.
+- If no exact match exists, the parser can fall back to the nearest available structure template within a small tolerance instead of immediately failing with a mismatch error.
+- This removes the need to manually replace `mpaStructure.xlsx` for every recurring report variant that already matches one of the known structure profiles in the template bank.
+- The parser still reports the active detected period window from the uploaded workbook itself, for example `Oct-25 to Dec-25`.
+
+## Latest Workbook Verification
+
+- Verified against `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx`.
+- Direct parser result:
+  - `header_row_index = 5`
+  - `detected_period_label = Oct-25 to Dec-25`
+  - `missing_fields = []`
+- Verified that the parser still resolves report-critical fields including:
+  - `PBT 2025 YTD ACHVD`
+  - `DDA Jul-25`
+  - `SAV Jul-25`
+  - `FD Jul-25`
+  - `DP Jul-25`
+  - `TRA Jul-25`
+  - `AB Jul-25`
+- Verified the new auto-template behavior by intentionally pointing the configured fallback path at a wrong structure file while the parser still auto-selected the correct matching template from the template bank.
+- Added regression coverage in `server/tests/test_upload_parser.py` for automatic matching-template selection.
+- Live API validation with the December workbook succeeded:
+  - `POST /generate-report/preview` returned `200` with `ready = true`
+  - `POST /generate-report/` returned `200` and generated `ABIA_1_Report.docx`
+
 ## Restored Structure Workflow
 
 - Updated the upload parser so the legacy `mpaStructure.xlsx` header-swap workflow is now the primary path again.
@@ -610,3 +641,497 @@ This document was produced by following these inspection steps:
 - Backend application: `server/Main.py`
 - Backend structure schema: `server/mpaStructure.xlsx`
 - Backend output template: `server/mpatemplate.docx`
+
+## 2026-04-01 October Workbook Validation
+- Tested `OCT 2025 MPR DISTRIBUTION.xlsx` against the new parser.
+- Fixed `upload_parser` to accept `Path` inputs during direct analysis.
+- Added contextual header inheritance so block-style headers carry their family labels across adjacent month and variance columns.
+- Verified direct parsing now resolves required report fields for October without rebuilding `mpaStructure.xlsx`.
+- Live `/generate-report/preview` for the October workbook returned `ready=true`, `missing_fields=[]`, `period='Aug-25 to Oct-25'`, and `155` zones.
+- Added a regression test covering block-style header inference.
+- Live `/generate-report/` for the October workbook now returns `200` and a valid `.docx` payload for `Abia 1 Total`.
+- Remaining automation gap for this turn: Playwright MCP browser session could not be reopened because the browser backend reported the page/context was already closed.
+
+
+## 2026-04-02 October Report Verification
+- Verified the October workbook end to end using only zones whose names contain `Total`.
+- Sampling seed: `20260402`.
+- Randomly selected zones: `South-West 5 Total`, `Ilupeju 2 Total`, `North Central 3 Total`, `Delta 2 Total`, `Edo 3 Total`.
+- For each selected zone, generated a live report through `POST /generate-report/`.
+- Opened each returned `.docx` and checked that key rendered values from the source workbook appeared in the document text.
+- Verified title, PBT, DDA, SAV, FD, DP, TRA, AB, and dormant-account values for all 5 reports.
+- Result: all checks passed for all 5 randomly selected `Total` zones.
+
+
+- Verified `Ikorodu 2 Total` specifically with the October workbook.
+- Generated a live `IKORODU_2_Report.docx` through the running API.
+- Captured the full generated context, extracted the raw source-row values from the workbook, and inspected the rendered `.docx` paragraphs and tables.
+- Confirmed the generated report values align with the normalized source values for PBT, DDA, SAV, FD, DP, TRA, AB, AO, CDS, CE, AOB, POS, NXP, and dormant-account sections.
+
+
+## 2026-04-07 Manual Rollback
+- Reverted the core upload parser back to the manual `mpaStructure.xlsx` header-swap workflow as the only active parsing path.
+- `parse_uploaded_workbook()` now always reads the uploaded file body with `skiprows=5`, overlays the tagged structure headers, and fails fast on column-count mismatch.
+- Dynamic semantic inference is no longer part of the active core flow.
+- Updated parser tests to reflect manual-structure behavior, including an explicit mismatch failure test.
+
+
+## 2026-04-07 Cost To Income Calibration
+- Verified the December workbook row for `Abuja 07 Total` and confirmed `PBT Cost to Income Ratio = 1.6238883056509614`.
+- Fixed report formatting so cost-to-income ratios use a dedicated ratio formatter instead of the generic percentage formatter.
+- `Abuja 07 Total` now renders `162%` in the generated report instead of `2%`.
+- Added backend tests covering fractional ratios like `1.6238` and whole percentages like `93.72`.
+
+
+## 2026-04-07 Dynamic Parser Re-enabled
+- Restored the dynamic parser as the primary parsing path in `parse_uploaded_workbook()`.
+- The parser now tries semantic/header-based inference first and falls back to the manual `mpaStructure.xlsx` header-swap workflow only when required fields are missing.
+- Restored parser tests for direct mapped-header extraction and block-style header inference.
+- Kept the manual structure overlay fallback path intact for comparison and safety.
+
+
+## 2026-04-07 Manual Structure Endpoint
+- Reverted the active parser back to the manual `mpaStructure.xlsx` workflow only.
+- Added `POST /structure/upload` to upload and replace the active `mpaStructure.xlsx` file.
+- The endpoint validates that the uploaded file is an Excel workbook with headers, backs up the existing active structure file, and then activates the new one.
+- Added backend tests for structure replacement and non-Excel rejection.
+
+
+- Added a dedicated frontend structure-management page at `client/src/pages/StructureBuilderPage.tsx`.
+- The page supports:
+  - uploading a fresh report to preview suggested structure headers,
+  - editing every suggested header inline before saving,
+  - directly uploading a manually prepared structure file.
+- Added backend endpoints:
+  - `POST /structure/preview`
+  - `POST /structure/save`
+  - `POST /structure/upload`
+- Added an ellipsis menu on the main upload page to hide `View History` and `Upload Structure File` actions behind a compact menu.
+
+
+- Refined the Structure Builder UX:
+  - added active structure status display using the uploaded/display filename instead of the internal `mpaStructure.xlsx` name,
+  - added cancel buttons for both selected source-report files and direct structure uploads,
+  - added searchable editable column names once editable headers are available,
+  - added a confirmed-tag checklist for common structure tags,
+  - made the main-page ellipsis menu fully teal-themed.
+- Added `GET /structure/status` to fetch the active structure metadata.
+- Fixed duplicate edited-header save failures by auto-resolving duplicate names with suffixes during save instead of rejecting the request.
+
+
+- Grouped the Structure Builder checklist into `Confirmed` and `Still Missing` sections for easier scanning.
+- Restored the ellipsis menu to a white dropdown surface while keeping teal text and hover styling.
+
+
+## 2026-04-07 Backend Logging And August Debugging
+- Added staged backend logging in `server/app/services/upload_parser.py` and `server/app/services/reporting.py` so the manual parse flow now logs:
+  - upload/body read start and completion
+  - structure-template candidate selection
+  - exact or nearest structure-template choice
+  - header overlay completion
+  - parse completion with structure path, missing fields, and zone count
+  - report context build start/completion
+  - branch-metric processing
+  - template render start/completion
+  - cleanup start/completion
+- Added logging bootstrap in `server/app/main.py` using a consistent timestamped INFO format.
+- Fixed a manual-parser edge case where the active `server/mpaStructure.xlsx` could be ignored if another `mpaStructure*.xlsx` sibling had the same column count.
+- The parser now always prefers the configured active `mpaStructure.xlsx` first, then only falls back to sibling templates when the active structure does not match.
+- Added a regression test in `server/tests/test_upload_parser.py` to ensure the active structure file wins when multiple templates share the same column count.
+- Added a reporting validation test in `server/tests/test_reporting.py` to guarantee missing tagged columns raise a clear HTTP error instead of a raw `KeyError`.
+- Verified with `AUGUST ZONAL DISTRIBUTION FOR BRANCHES.xlsx` that the original `'PBT Cost to Income Ratio'` failure path is gone once the active structure is preferred.
+- Current August finding for `Abuja 07 Total`: the next blocking issue is now explicit and logged clearly as missing active-structure tags:
+  - `CDS2 ACTIVE`
+  - `CDS2 INACTIVE`
+  - `CDS2 No. of Cards Issued`
+
+
+## 2026-04-07 Log Readability And Structure Verification
+- Reworded backend logs in `server/app/services/upload_parser.py` and `server/app/services/reporting.py` into plain-English step markers such as:
+  - `[Parser] Step 1/4: Reading uploaded report body...`
+  - `[Parser] Step 2/4: Selecting structure template...`
+  - `[Report] Starting generation...`
+  - `[Structure] Active structure replaced successfully...`
+- Confirmed via Playwright on `http://localhost:5173` that the Structure Builder displays the active structure display name and can upload a direct structure file through the UI.
+- For Playwright verification, ran a local SQLite-backed backend on `127.0.0.1:8000` because the previously running Supabase-backed server process was hanging during startup and browser requests were stalling.
+- Browser-verified workflow:
+  - uploaded `AUGUST ZONAL DISTRIBUTION FOR BRANCHES.xlsx` as the active structure file
+  - confirmed the Structure Builder shows `AUGUST ZONAL DISTRIBUTION FOR BRANCHES.xlsx` as the active structure display name with `442` headers
+  - returned to the upload page and attempted to generate `Abuja 07 Total` from the same August workbook
+- Key finding from the browser run and backend logs:
+  - before the latest parser correction, the manual parser still fell through to sibling template `server/mpaStructure AUGUST.xlsx` because it had an exact 461-column match
+  - this proved the system was not strictly using the active `server/mpaStructure.xlsx` after a direct structure replacement
+- Corrected the parser so the manual mode now uses only the configured active `server/mpaStructure.xlsx`.
+- If the active structure header count does not match the uploaded report body, the parser now fails immediately with an active-structure mismatch instead of silently switching to a sibling `mpaStructure*.xlsx` file.
+- Updated `server/app/services/reporting.py` so `ValueError` from workbook parsing becomes a clean HTTP `400` preview/generation error rather than a raw `500`.
+
+
+## 2026-04-08 Structure Builder Full Column Editing
+- Verified the August structure-preview pipeline returns all uploaded columns for manual editing:
+  - `header_count = 461`
+  - `original_headers` length = `461`
+  - `suggested_headers` length = `461`
+- Updated `client/src/pages/StructureBuilderPage.tsx` so the editable grid is built from the full maximum column count instead of assuming both header arrays are always identical in length.
+- Added explicit UI copy in the suggestion summary stating that every uploaded column remains editable even when no suggestion is available yet.
+- Added a visible `Showing X of Y columns` indicator beside the header search so it is clear the editor is not hiding unmapped columns unless the current search text filters them out.
+- Rebuilt the frontend successfully with `npm run build`.
+
+
+## 2026-04-08 Database Connection Clarification
+- Verified the temporary local history count came from `server/mp_analyzer_playwright.db`, which contains:
+  - `profiles = 2`
+  - `report_runs = 4`
+- Confirmed there is no MySQL dependency in this repo; the local database used during Playwright verification is SQLite.
+- Fixed `server/app/config.py` so the backend always loads `server/.env` via an absolute path, even when started from the repository root.
+- Verified the Supabase connection from the repository root after the config fix:
+  - `profiles = 1`
+  - `report_runs = 38`
+- Restarted the backend on `127.0.0.1:8000` against Supabase, replacing the temporary local SQLite-backed process.
+
+
+## 2026-04-08 Mystery Server Troubleshooting
+- Verified that `http://127.0.0.1:8000/profiles/1/history` was still responding even when the user believed no backend had been started.
+- Traced the listener with `netstat -ano` and found a local process bound to `127.0.0.1:8000`:
+  - PID `50192`
+  - process name `python3.11`
+  - start time `2026-04-08 10:56:45`
+- Identified the most recent server log sink in the repo as:
+  - `server/uvicorn8000-supabase.err.log`
+- Stopped PID `50192` and verified the endpoint no longer responds:
+  - `URLError [WinError 10061] No connection could be made because the target machine actively refused it`
+
+
+## 2026-04-08 September Abuja 07 Calibration
+- Used the September source workbook `SEPTEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx` together with the user-provided source-of-truth write-up `SEPT MPR_OSCAR (1).docx` to compare the manual structure path against the expected output for `Abuja 07 Total`.
+- Confirmed the drift was caused by ambiguous tagged columns in the active `mpaStructure.xlsx`, not by numeric formatting alone.
+- Root causes found in the manual structure file:
+  - duplicate `PBT 2025 YTD ACHVD` headers where the first occurrence pointed to an old historical year and the second occurrence held the real 2025 achieved value
+  - duplicate `DP` month and `DP YTD Variance` tags where the system was reading the wrong deposit block instead of the domiciliary deposit block used in the write-up
+  - `TRA May-25`, `TRA Jun-25`, `TRA Jul-25`, and `TRA YTD Variance` were tagged against the wrong TRA subsection instead of the `TRA TOTAL RISK ASSETS` block used in the write-up
+  - `AB Jun-25`, `AB Jul-25`, and `AB VAR` were mapped to the wrong agency-banking subsection instead of the value block used in the write-up
+- Fine-tuned `server/app/services/upload_parser.py` so the manual parser now applies alias corrections after the normal header swap:
+  - prefers the later duplicate for `PBT 2025 YTD ACHVD`
+  - prefers the later duplicate DP month/YTD columns
+  - aliases TRA month slots to the `TRA TOTAL RISK ASSETS` block
+  - aliases AB month/variance slots to the `AB VALUE` block
+- Fine-tuned `server/app/services/reporting.py` so write-up-facing presentation now matches the September reference document better:
+  - `AB VAR` is rendered as a magnitude for the write-up table
+  - `NXP YOY VAR` is rendered as a magnitude
+  - zero NXP monthly values render as `0.00`
+- Fixed `server/app/config.py` so relative `.env` overrides like `./mpaStructure.xlsx` and `./mpatemplate.docx` are resolved relative to `server/`, preventing silent path drift when the backend is started from the repository root.
+- Re-verified `Abuja 07 Total` after the calibration:
+  - `PBT`: `13.53B`, `43.17B`, `31`, `3.06B`, `9.88B`, `143`
+  - `DDA`: `58.25B`, `60.11B`, `66.19B`, `40`, `13.08B`
+  - `SAV`: `23.77B`, `23.83B`, `24.09B`, `44`, `1.36B`
+  - `FD`: `5.77B`, `5.06B`, `4.76B`, `35`, `2.97B`
+  - `DP`: `59.9M`, `59.8M`, `58M`, `160`, `35.9M`
+  - `TRA`: `5.62B`, `5.39B`, `5.63B`, `3`, `307M`
+  - `AB`: `297.70M`, `99.50M`, `198.20M`
+  - `NXP`: `0.00`, `0.00`, `0.00`, `554.50K`
+- Backend verification after the calibration:
+  - `pytest tests/test_upload_parser.py tests/test_reporting.py` passed from `server/`: `9 passed`
+
+
+## 2026-04-08 September Full Docx Audit
+- Ran a full comparison of every zone present in `SEPT MPR_OSCAR (1).docx` against the current manual-system output from `SEPTEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx`.
+- Confirmed the September write-up contains 8 zone sections and 112 tables:
+  - `ABUJA 07`
+  - `ABUJA 08`
+  - `ABUJA 09`
+  - `ABUJA 10`
+  - `COKER-TRADE FAIR`
+  - `IKEJA`
+  - `IKORODU 1`
+  - `IKORODU 2`
+- Found that the `.docx` does not keep the exact same table order for every zone, so later-zone comparisons had to be classified by table header meaning rather than by a fixed table index.
+- Full-audit findings after the Abuja 07 calibration:
+  - `ABUJA 07`: only presentation drift remained (`58.0M` in the write-up vs `58M` in the app)
+  - `ABUJA 08`: 3 mismatches, all in sign/format handling for DP and TRA YTD values
+  - `ABUJA 09`: 3 mismatches, including a sign issue on DDA YTD, DP formatting, and `NXP` zero display
+  - `ABUJA 10`: 2 mismatches, both sign handling on `FD`/`DP` YTD values
+  - `COKER-TRADE FAIR`: 6 mismatches, including sign handling plus `AB` magnitude formatting (`2.211B` vs `2211.20M`)
+  - `IKEJA`: 3 mismatches, all in `TRA` interpretation/sign handling and DP sign handling
+  - `IKORODU 1`: 12 mismatches, with the major remaining issue being that the write-up swaps `DDA` and `SAV` relative to the current system for this zone
+  - `IKORODU 2`: 3 mismatches, including sign handling and a `DMT_ACT_value3` mismatch where the write-up shows `227%` but the workbook row contains a normalized percentage value used by the app
+- Conclusion from the full audit:
+  - the Abuja 07 calibration generalized well for many core sections
+  - the biggest remaining system issues are:
+    - sign/presentation rules for YTD variance fields, which are not consistent with how the write-up chooses to display adverse variances
+    - a likely `DDA`/`SAV` label swap in the structure or write-up for `IKORODU 1`
+    - some write-up tables use billions notation where the app is still outputting millions notation for the same magnitude
+
+
+## 2026-04-08 Formatter Rule Update
+- Updated `server/app/services/normalization.py` to follow the new user-defined scaling rules:
+  - million-scaled columns (`N'm`, `$'m`) now use:
+    - `< 1000` as `M`
+    - `>= 1000` as `B`
+  - thousand-scaled columns (`$'000`) now use:
+    - `< 1000` as `K`
+    - `>= 1000` as `M`
+- Implemented a shared scaled-number formatter that:
+  - keeps up to 2 decimal places
+  - collapses exact integers to no decimal places
+  - keeps one decimal place only when the second decimal is zero
+  - uses truncation (`ROUND_DOWN`) to stay aligned with the provided examples such as `234,787 -> 234.78B`
+- `format_billions` and `format_dp_millions` now both follow the million-scaled rule.
+- `format_millions` now follows the thousand-scaled rule.
+- Added regression coverage in `server/tests/test_normalization.py` for the user examples:
+  - `1 -> 1M`
+  - `123 -> 123M`
+  - `1,234 -> 1.23B`
+  - `234,787 -> 234.78B`
+  - and the corresponding `$'000` examples for `K/M`
+- Updated `server/tests/test_reporting.py` to align magnitude formatting expectations with the new scaling rule.
+- Verified:
+  - `pytest tests/test_normalization.py tests/test_reporting.py` passed from `server/`: `9 passed`
+
+
+## 2026-04-08 Sign And Plain-Count Clarifications Applied
+- Applied the new user clarification that plain-count sections should not use K/M/B formatting:
+  - `ACCOUNTS OPENED`
+  - `CARDS`
+  - `CHANNELS ENROLLED`
+  - `AGENTS ONBOARDED`
+  - `POS`
+- Confirmed the current reporting layer already renders those sections as plain comma-separated integers, so no code change was needed there.
+- Applied the user’s sign/presentation guidance to variance-style report outputs:
+  - `DDA_value5`
+  - `SAV_value5`
+  - `FD_value5`
+  - `DP_value5`
+  - `TRA_value5`
+  now render as magnitudes in the report context.
+- Kept `NXP` monthly zero values as `0.00`.
+- Added tests in `server/tests/test_reporting.py` for:
+  - absolute magnitude formatting for billion- and DP-scaled variance outputs
+  - zero-safe `NXP` formatting
+- Re-verified:
+  - `pytest tests/test_normalization.py tests/test_reporting.py` passed from `server/`: `11 passed`
+- Spot-checked September examples after the change:
+  - `ABUJA 08 Total`: `DP_value5 = 7.55M`, `TRA_value5 = 3.17B`
+  - `ABUJA 10 Total`: `FD_value5 = 2.2B`, `DP_value5 = 6.4M`
+  - `COKER-TRADE FAIR Total`: `DDA_value5 = 4.05B`, `DP_value5 = 0.37M`, `TRA_value5 = 251.28M`
+
+
+## 2026-04-08 Formatter Calibration Follow-Up
+- Refined the million-scaled formatter so values below `1M` now render in `K`:
+  - example: `0.3725 -> 372.5K`
+- Refined the thousand-scaled formatter so very large values can roll up to `B`:
+  - example: `2211279.746 -> 2.21B`
+- Corrected `AB` report values back to the thousand-scaled formatter after confirming the raw workbook values are in thousands, not millions.
+- Re-verified five workbook-driven September zones after the change:
+  - `ABUJA 07 Total`
+  - `ABUJA 08 Total`
+  - `ABUJA 10 Total`
+  - `COKER-TRADE FAIR Total`
+  - `IKORODU 1 Total`
+- Test status after the follow-up:
+  - `pytest tests/test_normalization.py tests/test_reporting.py` passed from `server/`: `11 passed`
+
+
+## 2026-04-08 Full Audit Rerun After Final Formatter Rules
+- Reran the full September `.docx` audit after applying:
+  - workbook-as-truth for `IKORODU 1` `DDA`/`SAV`
+  - `K/M/B` formatter corrections
+  - thousand-scale `AB` formatter with `B` rollover
+- The remaining mismatches now split into two categories:
+  - cosmetic precision/presentation drift
+  - a small set of real semantic mismatches
+- Cosmetic drift examples:
+  - `59.8M` vs `59.83M`
+  - `554.50K` vs `554.5K`
+  - `2.211B` vs `2.21B`
+  - `0.00` vs `0K`
+- Real semantic mismatches that remain:
+  - `IKEJA Total`: `TRA_value4` write-up shows `145`, app shows `1`
+  - `IKORODU 1 Total`: write-up still swaps `DDA` and `SAV` relative to the workbook, but the app now intentionally follows the workbook
+  - `IKORODU 2 Total`: `DMT_ACT_value3` write-up shows `227`, app shows workbook-driven `2`
+- Full-audit status after the rerun:
+  - all 8 zones still have at least one mismatch if exact string equality is enforced
+  - most remaining mismatches are now precision/style differences rather than wrong source-column extraction
+
+
+## 2026-04-08 December Structure Update And Audit
+- Confirmed the active structure was updated to `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx` via `server/mpaStructure.meta.json`.
+- Parsed `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx` successfully with:
+  - `period = Oct-25 to Dec-25`
+  - `missing_fields = []`
+  - `zones = 154`
+- Initial December generation failed because the new structure file exposed card blocks as:
+  - `AO 224 CARDS NOVEMBER No. of Cards Issued`
+  - `AO 234 ACTIVE`
+  - `AO 235 INACTIVE`
+  - `AO 224 CARDS DECEMBER No. of Cards Issued`
+  - `AO 234 ACTIVE__2`
+  - `AO 235 INACTIVE__2`
+  instead of the expected `CDS1` / `CDS2` tags.
+- Updated the manual alias resolver in `server/app/services/upload_parser.py` so the last two detected card blocks are mapped automatically to:
+  - `CDS1 No. of Cards Issued`
+  - `CDS1 ACTIVE`
+  - `CDS1 INACTIVE`
+  - `CDS2 No. of Cards Issued`
+  - `CDS2 ACTIVE`
+  - `CDS2 INACTIVE`
+- Added a regression test in `server/tests/test_upload_parser.py` for the December-style card block aliasing.
+- Verified the December report context now builds successfully for `ABUJA 07 Total`.
+- Ran a December full audit against `DECEMBER MPR - CORRECTED.docx`.
+- December audit result:
+  - no zone is yet a perfect exact-string match
+  - a large share of the remaining drift is still precision-only, e.g.:
+    - `59.4M` vs `59.49M`
+    - `3.70B` vs `3.7B`
+    - `554.50K` vs `554.5K`
+  - key real December semantic mismatches remain in:
+    - `IKEJA` where `SAV` and `FD` appear swapped between the workbook-driven app output and the corrected write-up
+    - `IKORODU 1` where `DDA` and `SAV` appear swapped
+    - `IKORODU 2` where `DMT_ACT_value3` differs materially (`148` in the write-up vs workbook-driven `1`)
+- Verification after the December alias fix:
+  - `pytest tests/test_upload_parser.py tests/test_reporting.py` passed from `server/`: `12 passed`
+
+
+## 2026-04-09 December Targeted Inspection
+- Inspected the December workbook directly for the three user-specified concern areas:
+  - `IKEJA SAV/FD`
+  - `IKORODU 1 DDA/SAV`
+  - `IKORODU 2 DMT_ACT_value3`
+- Findings:
+  - `IKEJA` workbook values show the app is correct:
+    - `SAV` rows in the workbook are `37.99B`, `37.75B`, `38.44B`, `8.66B`
+    - `FD` rows in the workbook are `44.65B`, `31.82B`, `21.21B`, `9.84B`
+    - the earlier mismatch came from the December write-up audit classifier, which assumed the larger of the two rolling blocks must be `SAV`; for `IKEJA`, `FD` is actually larger than `SAV`
+  - `IKORODU 1` workbook values also show the app is correct:
+    - `DDA` is `33.21B`, `34.92B`, `35.03B`, `4.83B`
+    - `SAV` is `36.79B`, `37.68B`, `38.62B`, `5.67B`
+    - the earlier mismatch again came from the write-up table classifier rather than the report extraction
+  - `IKORODU 2 DMT_ACT_value3` is a real app issue:
+    - workbook raw `% Reactivated DMT_ACT = 1.483652843719201`
+    - corrected write-up shows `148%`
+    - current app output is `1` because `format_percentage()` only multiplies by 100 when the value is `<= 1`
+- Conclusion:
+  - `IKEJA SAV/FD` is not a workbook-mapping bug
+  - `IKORODU 1 DDA/SAV` is not a workbook-mapping bug
+  - `IKORODU 2 DMT_ACT_value3` is a real percentage-scaling bug in the reporting layer
+
+
+## 2026-04-09 December DMT Reactivation Fix
+- Added a dedicated `_format_reactivated_percentage()` helper in `server/app/services/reporting.py`.
+- Switched `DMT_ACT_value3` to use the dedicated reactivation formatter instead of the generic `format_percentage()`.
+- The new rule treats `% Reactivated DMT_ACT` as a ratio-like field whenever the absolute value is below `10`, so:
+  - `0.079748... -> 8`
+  - `1.483652... -> 148`
+- Added regression coverage in `server/tests/test_reporting.py` for both cases.
+- Verified for `IKORODU 2 Total` in the December workbook:
+  - `DMT_ACT_value1 = 11,512`
+  - `DMT_ACT_value2 = 172`
+  - `DMT_ACT_value3 = 148`
+- Verification:
+  - `pytest tests/test_reporting.py` passed from `server/`: `8 passed`
+
+
+## 2026-04-13 Point One Rollback Baseline
+- Marked this state as **Point One** before starting the dynamic-writeup phase.
+- Point One behavior:
+  - manual `mpaStructure.xlsx` header-swap remains the extraction source of truth
+  - Word document rendering still uses `docxtpl` and the existing `mpatemplate.docx`
+  - report tables remain template-driven and must not be replaced in this phase
+  - only write-up/summary placeholders should become dynamic in Phase 1
+- Rollback target if needed:
+  - restore static summary placeholders in `server/app/services/reporting.py`
+  - remove/ignore the new `server/app/analysis` layer
+
+
+## 2026-04-13 Phase 1 Dynamic Write-Up
+- Implemented Phase 1 of dynamic analysis while preserving the existing Word document tables.
+- Added a backend analysis layer:
+  - `server/app/analysis/models.py`
+  - `server/app/analysis/narratives.py`
+  - `server/app/analysis/__init__.py`
+- The report renderer still builds all existing table values from the workbook-driven reporting context.
+- The new analysis layer only replaces summary/write-up placeholders such as:
+  - `PBT_summary`
+  - `DDA_summary`
+  - `SAV_summary`
+  - `FD_summary`
+  - `DP_summary`
+  - `TRA_summary`
+  - `AB_summary`
+  - `CDS_summary`
+  - `POS_summary`
+- `server/app/services/reporting.py` now calls `build_report_analysis()` after the existing context is built, then merges the generated summaries back into the `docxtpl` context.
+- No Word template structure changes were made; tables remain intact and template-driven.
+- Added regression coverage in `server/tests/test_analysis_narratives.py`.
+- Verification:
+  - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `9 passed`
+  - live context check with `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx` and `ABUJA 07 Total` produced dynamic summary text instead of static placeholders.
+
+
+## 2026-04-13 Phase 2 Analytical Write-Up
+- Upgraded the dynamic write-up layer from fact-only sentences to analytical movement commentary.
+- `server/app/analysis/narratives.py` now includes helpers for:
+  - reading formatted values such as `1.23B`, `372.5K`, percentages, commas, and accounting negatives like `(14.16M)`
+  - detecting growth, decline, or broadly flat movement between periods
+  - calculating displayed percentage movement between prior and current period values
+  - describing favorable/adverse variance language for write-ups
+  - wording branch contribution as percentages instead of bare numbers
+- The Word document tables remain unchanged and template-driven.
+- The Phase 2 write-up now gives clearer movement commentary for rolling-period sections:
+  - `DDA_summary`
+  - `SAV_summary`
+  - `FD_summary`
+  - `DP_summary`
+  - `TRA_summary`
+  - `AB_summary`
+- Added tests for:
+  - growth wording
+  - decline wording
+  - branch contribution wording
+  - adverse accounting-negative variance wording
+- Verification:
+  - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `10 passed`
+
+
+## 2026-04-13 Phase 2 Variance Language Calibration
+- Tuned branch-level narrative wording so negative variance values are called out explicitly.
+- Behavior:
+  - positive branch variance renders as `a MOM variance of ...`
+  - negative branch variance renders as `a negative MOM variance of ...`
+  - PBT branch monthly variance uses the same negative-aware wording with `monthly variance`
+- Added punctuation handling in `ReportAnalysis.to_template_context()` so generated summaries do not end with a full stop before being inserted into the Word template; this prevents rendered `..` output because the template already supplies final punctuation.
+- Cleaned the TRA summary wording so `YTD variance` remains properly capitalized.
+- Verified with `North-East 2 Total` from `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx`.
+- North-East 2 DDA rendered output now includes:
+  - `Gombe led the zone with 55% contribution and a negative MOM variance of -1.93B`
+  - `Potiskum recorded the lowest contribution at 4%, with a MOM variance of 17.3M`
+- Verification:
+  - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `10 passed`
+
+
+## 2026-04-13 Phase 2 Template-Aware Variance And Month Calibration
+- Updated the report context and Word template so branch bullet lines can use dynamic variance labels instead of hardcoded `MOM variance`.
+- Branch variance values now include the Naira sign in generated narrative/bullet output:
+  - `₦-1.93B`
+  - `₦17.3M`
+- Branch variance labels now resolve from the value sign:
+  - negative values render as `Negative MOM variance`
+  - positive values render as `Positive MOM variance`
+  - zero values remain `MOM variance`
+- Updated `server/mpatemplate.docx` branch bullets to use new placeholders:
+  - `*_branch_high_var_label`
+  - `*_branch_low_var_label`
+- Added detected-period month placeholders to `server/mpatemplate.docx` so report headings/table labels follow the uploaded report period:
+  - `period_month_1`
+  - `period_month_2`
+  - `period_month_3`
+  - `period_month_previous`
+  - `period_month_current`
+  - `report_month`
+- Added backend period-label parsing in `server/app/services/reporting.py`; example:
+  - `Oct-25 to Dec-25` renders `OCTOBER`, `NOVEMBER`, `DECEMBER`
+  - `Sep-25 to Nov-25` renders current/report month as `NOVEMBER`
+- Verified by rendering `North-East 2 Total` from `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx`.
+- Rendered DDA output now includes:
+  - `Gombe led the zone with 55% contribution and a Negative MOM variance of ₦-1.93B`
+  - `Potiskum recorded the lowest contribution at 4%, with a Positive MOM variance of ₦17.3M`
+- Verification:
+  - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `12 passed`

@@ -1,0 +1,139 @@
+C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\docxcompose\properties.py:18: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+INFO:     Started server process [54244]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 146, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3302, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 449, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1263, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 179, in _do_get
+    with util.safe_reraise():
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 177, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 390, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 643, in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 621, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\psycopg\connection.py", line 125, in connect
+    raise type(last_ex)("\n".join(lines)).with_traceback(None)
+psycopg.errors.ConnectionTimeout: connection timeout expired
+Multiple connection attempts failed. All failures were:
+- host: 'aws-1-eu-north-1.pooler.supabase.com', port: 6543, hostaddr: '51.21.18.29': connection timeout expired
+- host: 'aws-1-eu-north-1.pooler.supabase.com', port: 6543, hostaddr: '13.60.102.132': connection timeout expired
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\starlette\routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\fastapi\routing.py", line 134, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\fastapi\routing.py", line 134, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\starlette\routing.py", line 571, in __aenter__
+    await self._router.startup()
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\starlette\routing.py", line 673, in startup
+    handler()
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\server\app\main.py", line 31, in on_startup
+    Base.metadata.create_all(bind=engine)
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 5868, in create_all
+    bind._run_ddl_visitor(
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3252, in _run_ddl_visitor
+    with self.begin() as conn:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3242, in begin
+    with self.connect() as conn:
+         ^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3278, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 148, in __init__
+    Connection._handle_dbapi_exception_noconnection(
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2442, in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 146, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3302, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 449, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1263, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 179, in _do_get
+    with util.safe_reraise():
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 177, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 390, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\create.py", line 643, in connect
+    return dialect.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 621, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Chidera Aniekwe\Projects\MP-Analyzer\.venv\Lib\site-packages\psycopg\connection.py", line 125, in connect
+    raise type(last_ex)("\n".join(lines)).with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.errors.ConnectionTimeout) connection timeout expired
+Multiple connection attempts failed. All failures were:
+- host: 'aws-1-eu-north-1.pooler.supabase.com', port: 6543, hostaddr: '51.21.18.29': connection timeout expired
+- host: 'aws-1-eu-north-1.pooler.supabase.com', port: 6543, hostaddr: '13.60.102.132': connection timeout expired
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+
+ERROR:    Application startup failed. Exiting.
