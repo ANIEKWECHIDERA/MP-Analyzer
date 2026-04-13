@@ -1027,3 +1027,65 @@ This document was produced by following these inspection steps:
   - `DMT_ACT_value3 = 148`
 - Verification:
   - `pytest tests/test_reporting.py` passed from `server/`: `8 passed`
+
+
+## 2026-04-13 Point One Rollback Baseline
+- Marked this state as **Point One** before starting the dynamic-writeup phase.
+- Point One behavior:
+  - manual `mpaStructure.xlsx` header-swap remains the extraction source of truth
+  - Word document rendering still uses `docxtpl` and the existing `mpatemplate.docx`
+  - report tables remain template-driven and must not be replaced in this phase
+  - only write-up/summary placeholders should become dynamic in Phase 1
+- Rollback target if needed:
+  - restore static summary placeholders in `server/app/services/reporting.py`
+  - remove/ignore the new `server/app/analysis` layer
+
+
+## 2026-04-13 Phase 1 Dynamic Write-Up
+- Implemented Phase 1 of dynamic analysis while preserving the existing Word document tables.
+- Added a backend analysis layer:
+  - `server/app/analysis/models.py`
+  - `server/app/analysis/narratives.py`
+  - `server/app/analysis/__init__.py`
+- The report renderer still builds all existing table values from the workbook-driven reporting context.
+- The new analysis layer only replaces summary/write-up placeholders such as:
+  - `PBT_summary`
+  - `DDA_summary`
+  - `SAV_summary`
+  - `FD_summary`
+  - `DP_summary`
+  - `TRA_summary`
+  - `AB_summary`
+  - `CDS_summary`
+  - `POS_summary`
+- `server/app/services/reporting.py` now calls `build_report_analysis()` after the existing context is built, then merges the generated summaries back into the `docxtpl` context.
+- No Word template structure changes were made; tables remain intact and template-driven.
+- Added regression coverage in `server/tests/test_analysis_narratives.py`.
+- Verification:
+  - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `9 passed`
+  - live context check with `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx` and `ABUJA 07 Total` produced dynamic summary text instead of static placeholders.
+
+
+## 2026-04-13 Phase 2 Analytical Write-Up
+- Upgraded the dynamic write-up layer from fact-only sentences to analytical movement commentary.
+- `server/app/analysis/narratives.py` now includes helpers for:
+  - reading formatted values such as `1.23B`, `372.5K`, percentages, commas, and accounting negatives like `(14.16M)`
+  - detecting growth, decline, or broadly flat movement between periods
+  - calculating displayed percentage movement between prior and current period values
+  - describing favorable/adverse variance language for write-ups
+  - wording branch contribution as percentages instead of bare numbers
+- The Word document tables remain unchanged and template-driven.
+- The Phase 2 write-up now gives clearer movement commentary for rolling-period sections:
+  - `DDA_summary`
+  - `SAV_summary`
+  - `FD_summary`
+  - `DP_summary`
+  - `TRA_summary`
+  - `AB_summary`
+- Added tests for:
+  - growth wording
+  - decline wording
+  - branch contribution wording
+  - adverse accounting-negative variance wording
+- Verification:
+  - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `10 passed`

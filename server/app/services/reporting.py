@@ -15,6 +15,7 @@ from docxtpl import DocxTemplate
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from ..analysis import build_report_analysis
 from ..config import settings
 from ..models import ReportRun
 from .normalization import format_billions, format_dp_millions, format_millions, format_percentage, normalize_text, parse_numeric
@@ -573,6 +574,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
         "DMT_ACT_value3": _format_reactivated_percentage(value("% Reactivated DMT_ACT")),
         **branch_data,
     }
+    analysis = build_report_analysis(title, parsed.detected_period_label, context)
+    context.update(analysis.to_template_context())
     logger.info("[Report] Template context complete for '%s' (%s values).", zone_name, len(context))
     return context
 
