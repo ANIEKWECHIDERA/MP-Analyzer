@@ -70,17 +70,17 @@ def _movement_sentence(metric: str, first: str, second: str, current: str) -> st
     change = _format_change(_percentage_change(second, current))
     if direction == "grew":
         return (
-            f"{metric} grew to {current}, up {change} from {second}, "
-            f"after opening the review period at {first}."
+            f"{metric} grew to ₦{current}, up {change} from ₦{second}, "
+            f"after opening the review period at ₦{first}."
         )
     if direction == "declined":
         return (
-            f"{metric} declined to {current}, down {change} from {second}, "
-            f"after opening the review period at {first}."
+            f"{metric} declined to ₦{current}, down {change} from ₦{second}, "
+            f"after opening the review period at ₦{first}."
         )
     return (
-        f"{metric} remained broadly flat at {current}, compared with {second} "
-        f"in the prior period and {first} at the start of the review period."
+        f"{metric} remained broadly flat at ₦{current}, compared with ₦{second} "
+        f"in the prior period and ₦{first} at the start of the review period."
     )
 
 
@@ -137,10 +137,10 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
             key="PBT_summary",
             title="PBT",
             summary=(
-                f"{zone_title} achieved {_value(context, 'PBT_value1')} PBT against a full-year budget of "
+                f"{zone_title} achieved ₦{_value(context, 'PBT_value1')} PBT against a full-year budget of ₦"
                 f"{_value(context, 'PBT_value2')}, representing {_value(context, 'PBT_value3')}% budget achievement"
-                f"{period_text}. The zone recorded a YOY variance of {_value(context, 'PBT_value4')}, "
-                f"an expected run rate of {_value(context, 'PBT_value5')}, and a cost-to-income ratio of "
+                f"{period_text}. The zone recorded a YOY variance of ₦{_value(context, 'PBT_value4')}, "
+                f"an expected run rate of ₦{_value(context, 'PBT_value5')}, and a cost-to-income ratio of "
                 f"{_value(context, 'PBT_value6')}%."
                 + _branch_sentence(
                     context,
