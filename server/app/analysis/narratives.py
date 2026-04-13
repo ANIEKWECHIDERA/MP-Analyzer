@@ -95,21 +95,37 @@ def _variance_sentence(label: str, value: str) -> str:
     return f"{label} variance was flat at {value}."
 
 
+def _variance_noun(label: str, value: str) -> str:
+    numeric = _display_number(value)
+    descriptor = "Negative " if numeric is not None and numeric < 0 else "Positive " if numeric is not None and numeric > 0 else ""
+    return f"{descriptor}{label}"
+
+
 def _branch_sentence(
     context: dict[str, object],
     high_key: str,
     low_key: str,
     high_value_key: str | None = None,
     low_value_key: str | None = None,
+    high_variance_key: str | None = None,
+    low_variance_key: str | None = None,
+    variance_label: str = "MOM variance",
 ) -> str:
     high = _value(context, high_key, "")
     low = _value(context, low_key, "")
     if not high or not low:
         return ""
     if high_value_key and low_value_key:
+        high_detail = f"{_value(context, high_value_key)}% contribution"
+        low_detail = f"{_value(context, low_value_key)}%"
+        if high_variance_key and low_variance_key:
+            high_variance = _value(context, high_variance_key)
+            low_variance = _value(context, low_variance_key)
+            high_detail = f"{high_detail} and a {_variance_noun(variance_label, high_variance)} of {high_variance}"
+            low_detail = f"{low_detail}, with a {_variance_noun(variance_label, low_variance)} of {low_variance}"
         return (
-            f" At branch level, {high} led the zone with {_value(context, high_value_key)}% contribution, "
-            f"while {low} recorded the lowest contribution at {_value(context, low_value_key)}%."
+            f" At branch level, {high} led the zone with {high_detail}, "
+            f"while {low} recorded the lowest contribution at {low_detail}."
         )
     return f" At branch level, {high} led the zone while {low} recorded the lowest contribution."
 
@@ -132,6 +148,9 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
                     "PBT_branch_low",
                     "PBT_branch_high_perc",
                     "PBT_branch_low_perc",
+                    "PBT_branch_high_var",
+                    "PBT_branch_low_var",
+                    "monthly variance",
                 )
             ),
         ),
@@ -143,7 +162,15 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
                 f"The zone achieved "
                 f"{_value(context, 'DDA_value4')}% of budget and recorded a YTD variance of "
                 f"{_value(context, 'DDA_value5')}."
-                + _branch_sentence(context, "DDA_branch_high", "DDA_branch_low", "DDA_branch_high_perc", "DDA_branch_low_perc")
+                + _branch_sentence(
+                    context,
+                    "DDA_branch_high",
+                    "DDA_branch_low",
+                    "DDA_branch_high_perc",
+                    "DDA_branch_low_perc",
+                    "DDA_branch_high_var",
+                    "DDA_branch_low_var",
+                )
             ),
         ),
         AnalysisSection(
@@ -153,7 +180,15 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
                 f"{_movement_sentence('Savings', _value(context, 'SAV_value1'), _value(context, 'SAV_value2'), _value(context, 'SAV_value3'))} "
                 f"Budget achievement stood at "
                 f"{_value(context, 'SAV_value4')}%, with a YTD variance of {_value(context, 'SAV_value5')}."
-                + _branch_sentence(context, "SAV_branch_high", "SAV_branch_low", "SAV_branch_high_perc", "SAV_branch_low_perc")
+                + _branch_sentence(
+                    context,
+                    "SAV_branch_high",
+                    "SAV_branch_low",
+                    "SAV_branch_high_perc",
+                    "SAV_branch_low_perc",
+                    "SAV_branch_high_var",
+                    "SAV_branch_low_var",
+                )
             ),
         ),
         AnalysisSection(
@@ -164,7 +199,15 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
                 f"The zone achieved "
                 f"{_value(context, 'FD_value4')}% of budget and recorded a YTD variance of "
                 f"{_value(context, 'FD_value5')}."
-                + _branch_sentence(context, "FD_branch_high", "FD_branch_low", "FD_branch_high_perc", "FD_branch_low_perc")
+                + _branch_sentence(
+                    context,
+                    "FD_branch_high",
+                    "FD_branch_low",
+                    "FD_branch_high_perc",
+                    "FD_branch_low_perc",
+                    "FD_branch_high_var",
+                    "FD_branch_low_var",
+                )
             ),
         ),
         AnalysisSection(
@@ -183,8 +226,8 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
             title="Total Risk Assets",
             summary=(
                 f"{_movement_sentence('Total Risk Assets', _value(context, 'TRA_value1'), _value(context, 'TRA_value2'), _value(context, 'TRA_value3'))} "
-                f"The loan-to-deposit ratio was {_value(context, 'TRA_value4')}%, and "
-                f"{_variance_sentence('YTD', _value(context, 'TRA_value5')).lower()}"
+                f"The loan-to-deposit ratio was {_value(context, 'TRA_value4')}%, while "
+                f"{_variance_sentence('YTD', _value(context, 'TRA_value5'))}"
             ),
         ),
         AnalysisSection(

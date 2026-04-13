@@ -1089,3 +1089,49 @@ This document was produced by following these inspection steps:
   - adverse accounting-negative variance wording
 - Verification:
   - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `10 passed`
+
+
+## 2026-04-13 Phase 2 Variance Language Calibration
+- Tuned branch-level narrative wording so negative variance values are called out explicitly.
+- Behavior:
+  - positive branch variance renders as `a MOM variance of ...`
+  - negative branch variance renders as `a negative MOM variance of ...`
+  - PBT branch monthly variance uses the same negative-aware wording with `monthly variance`
+- Added punctuation handling in `ReportAnalysis.to_template_context()` so generated summaries do not end with a full stop before being inserted into the Word template; this prevents rendered `..` output because the template already supplies final punctuation.
+- Cleaned the TRA summary wording so `YTD variance` remains properly capitalized.
+- Verified with `North-East 2 Total` from `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx`.
+- North-East 2 DDA rendered output now includes:
+  - `Gombe led the zone with 55% contribution and a negative MOM variance of -1.93B`
+  - `Potiskum recorded the lowest contribution at 4%, with a MOM variance of 17.3M`
+- Verification:
+  - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `10 passed`
+
+
+## 2026-04-13 Phase 2 Template-Aware Variance And Month Calibration
+- Updated the report context and Word template so branch bullet lines can use dynamic variance labels instead of hardcoded `MOM variance`.
+- Branch variance values now include the Naira sign in generated narrative/bullet output:
+  - `₦-1.93B`
+  - `₦17.3M`
+- Branch variance labels now resolve from the value sign:
+  - negative values render as `Negative MOM variance`
+  - positive values render as `Positive MOM variance`
+  - zero values remain `MOM variance`
+- Updated `server/mpatemplate.docx` branch bullets to use new placeholders:
+  - `*_branch_high_var_label`
+  - `*_branch_low_var_label`
+- Added detected-period month placeholders to `server/mpatemplate.docx` so report headings/table labels follow the uploaded report period:
+  - `period_month_1`
+  - `period_month_2`
+  - `period_month_3`
+  - `period_month_previous`
+  - `period_month_current`
+  - `report_month`
+- Added backend period-label parsing in `server/app/services/reporting.py`; example:
+  - `Oct-25 to Dec-25` renders `OCTOBER`, `NOVEMBER`, `DECEMBER`
+  - `Sep-25 to Nov-25` renders current/report month as `NOVEMBER`
+- Verified by rendering `North-East 2 Total` from `DECEMBER ZONAL DISTRIBUTION FOR BRANCHES.xlsx`.
+- Rendered DDA output now includes:
+  - `Gombe led the zone with 55% contribution and a Negative MOM variance of ₦-1.93B`
+  - `Potiskum recorded the lowest contribution at 4%, with a Positive MOM variance of ₦17.3M`
+- Verification:
+  - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `12 passed`

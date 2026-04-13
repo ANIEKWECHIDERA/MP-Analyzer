@@ -37,6 +37,48 @@ from .upload_parser import (
 
 logger = logging.getLogger(__name__)
 
+MONTH_ABBREVIATIONS = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
+
+MONTH_NAMES = {
+    1: "JANUARY",
+    2: "FEBRUARY",
+    3: "MARCH",
+    4: "APRIL",
+    5: "MAY",
+    6: "JUNE",
+    7: "JULY",
+    8: "AUGUST",
+    9: "SEPTEMBER",
+    10: "OCTOBER",
+    11: "NOVEMBER",
+    12: "DECEMBER",
+}
+
 REPORT_REQUIRED_COLUMNS = [
     "PBT 2025 YTD ACHVD",
     "PBT 2025 FULL YR BGT",
@@ -350,6 +392,64 @@ def _format_reactivated_percentage(value: Decimal | None) -> str:
     return f"{numeric:.0f}"
 
 
+def _currency(value: str) -> str:
+    text = normalize_text(value)
+    return text if text.startswith("₦") else f"₦{text}"
+
+
+def _variance_label(value: str, label: str = "MOM variance") -> str:
+    numeric = parse_numeric(value)
+    if numeric is None or numeric == 0:
+        return label
+    return f"{'Negative' if numeric < 0 else 'Positive'} {label}"
+
+
+def _month_sequence(first_month: int, last_month: int) -> list[int]:
+    months = [first_month]
+    current = first_month
+    while current != last_month and len(months) < 12:
+        current = 1 if current == 12 else current + 1
+        months.append(current)
+    return months
+
+
+def _previous_month(month: int) -> int:
+    return 12 if month == 1 else month - 1
+
+
+def _period_month_context(period_label: str | None) -> dict[str, str]:
+    fallback = ["OCTOBER", "NOVEMBER", "DECEMBER"]
+    matches = re.findall(r"\b([A-Za-z]{3,9})-\d{2,4}\b", period_label or "")
+    detected = [MONTH_ABBREVIATIONS[match.lower()] for match in matches if match.lower() in MONTH_ABBREVIATIONS]
+
+    if len(detected) >= 2:
+        sequence = _month_sequence(detected[0], detected[-1])
+        if len(sequence) >= 3:
+            labels = [MONTH_NAMES[month] for month in sequence[-3:]]
+        else:
+            labels = [MONTH_NAMES[month] for month in sequence]
+    elif len(detected) == 1:
+        month_3 = detected[0]
+        month_2 = _previous_month(month_3)
+        month_1 = _previous_month(month_2)
+        labels = [MONTH_NAMES[month_1], MONTH_NAMES[month_2], MONTH_NAMES[month_3]]
+    else:
+        labels = fallback
+
+    while len(labels) < 3:
+        first_month = MONTH_ABBREVIATIONS[labels[0].lower()]
+        labels.insert(0, MONTH_NAMES[_previous_month(first_month)])
+
+    return {
+        "period_month_1": labels[-3],
+        "period_month_2": labels[-2],
+        "period_month_3": labels[-1],
+        "period_month_previous": labels[-2],
+        "period_month_current": labels[-1],
+        "report_month": labels[-1],
+    }
+
+
 def _zone_rows(dataframe: pd.DataFrame, zone_name: str) -> pd.DataFrame:
     normalized_zone = normalize_text(zone_name).lower()
     filtered = dataframe[
@@ -402,18 +502,20 @@ def _branch_metrics(zone_name: str, dataframe: pd.DataFrame) -> dict[str, str]:
     def formatted_variance(row: pd.Series, column: str, formatter: str) -> str:
         value = parse_numeric(row[column]) or Decimal("0")
         if formatter == "billions":
-            return format_billions(value)
+            return _currency(format_billions(value))
         if formatter == "dp":
-            return format_dp_millions(value)
+            return _currency(format_dp_millions(value))
         if formatter == "millions":
-            return format_millions(value)
-        return variance_value(row, column)
+            return _currency(format_millions(value))
+        return _currency(variance_value(row, column))
 
     metrics = {
         "PBT_branch_high": normalize_text(pbt_high["BRANCHES"]),
         "PBT_branch_low": normalize_text(pbt_low["BRANCHES"]),
         "PBT_branch_high_var": formatted_variance(pbt_high, "PBT Mthly Var", "billions"),
         "PBT_branch_low_var": formatted_variance(pbt_low, "PBT Mthly Var", "billions"),
+        "PBT_branch_high_var_label": _variance_label(variance_value(pbt_high, "PBT Mthly Var")),
+        "PBT_branch_low_var_label": _variance_label(variance_value(pbt_low, "PBT Mthly Var")),
         "PBT_branch_high_perc": share(pbt_high, "PBT 2025 YTD ACHVD"),
         "PBT_branch_low_perc": share(pbt_low, "PBT 2025 YTD ACHVD"),
         "PBT_branch_cost_to_income_high": normalize_text(pbt_cti_high["BRANCHES"]),
@@ -424,18 +526,24 @@ def _branch_metrics(zone_name: str, dataframe: pd.DataFrame) -> dict[str, str]:
         "DDA_branch_low": normalize_text(dda_low["BRANCHES"]),
         "DDA_branch_high_var": formatted_variance(dda_high, "DDA MOM Variance", "billions"),
         "DDA_branch_low_var": formatted_variance(dda_low, "DDA MOM Variance", "billions"),
+        "DDA_branch_high_var_label": _variance_label(variance_value(dda_high, "DDA MOM Variance")),
+        "DDA_branch_low_var_label": _variance_label(variance_value(dda_low, "DDA MOM Variance")),
         "DDA_branch_high_perc": share(dda_high, "DDA Jul-25"),
         "DDA_branch_low_perc": share(dda_low, "DDA Jul-25"),
         "SAV_branch_high": normalize_text(sav_high["BRANCHES"]),
         "SAV_branch_low": normalize_text(sav_low["BRANCHES"]),
         "SAV_branch_high_var": formatted_variance(sav_high, "SAV MOM Variance", "billions"),
         "SAV_branch_low_var": formatted_variance(sav_low, "SAV MOM Variance", "billions"),
+        "SAV_branch_high_var_label": _variance_label(variance_value(sav_high, "SAV MOM Variance")),
+        "SAV_branch_low_var_label": _variance_label(variance_value(sav_low, "SAV MOM Variance")),
         "SAV_branch_high_perc": share(sav_high, "SAV Jul-25"),
         "SAV_branch_low_perc": share(sav_low, "SAV Jul-25"),
         "FD_branch_high": normalize_text(fd_high["BRANCHES"]),
         "FD_branch_low": normalize_text(fd_low["BRANCHES"]),
         "FD_branch_high_var": formatted_variance(fd_high, "FD MOM Variance", "billions"),
         "FD_branch_low_var": formatted_variance(fd_low, "FD MOM Variance", "billions"),
+        "FD_branch_high_var_label": _variance_label(variance_value(fd_high, "FD MOM Variance")),
+        "FD_branch_low_var_label": _variance_label(variance_value(fd_low, "FD MOM Variance")),
         "FD_branch_high_perc": share(fd_high, "FD Jul-25"),
         "FD_branch_low_perc": share(fd_low, "FD Jul-25"),
         "DP_branch_high": normalize_text(dp_high["BRANCHES"]),
@@ -572,6 +680,7 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
         "DMT_ACT_value1": f"{value('TOTAL_DMT_ACT'):,.0f}",
         "DMT_ACT_value2": f"{value('No. Reactivated DMT_ACT'):,.0f}",
         "DMT_ACT_value3": _format_reactivated_percentage(value("% Reactivated DMT_ACT")),
+        **_period_month_context(parsed.detected_period_label),
         **branch_data,
     }
     analysis = build_report_analysis(title, parsed.detected_period_label, context)

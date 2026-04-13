@@ -11,6 +11,8 @@ from app.services.reporting import (
     _format_reactivated_percentage,
     _format_ratio_percentage,
     _format_zero_safe_millions,
+    _period_month_context,
+    _variance_label,
     _validate_report_columns,
 )
 from app.services.upload_parser import ParsedWorkbook
@@ -59,3 +61,21 @@ def test_format_magnitude_dp_uses_absolute_value() -> None:
 def test_format_reactivated_percentage_handles_fraction_and_over_one_ratio() -> None:
     assert _format_reactivated_percentage(Decimal("0.07974896776892915")) == "8"
     assert _format_reactivated_percentage(Decimal("1.483652843719201")) == "148"
+
+
+def test_variance_label_marks_positive_and_negative_values() -> None:
+    assert _variance_label("-1.93B") == "Negative MOM variance"
+    assert _variance_label("17.3M") == "Positive MOM variance"
+    assert _variance_label("0") == "MOM variance"
+
+
+def test_period_month_context_uses_detected_report_period() -> None:
+    assert _period_month_context("Oct-25 to Dec-25") == {
+        "period_month_1": "OCTOBER",
+        "period_month_2": "NOVEMBER",
+        "period_month_3": "DECEMBER",
+        "period_month_previous": "NOVEMBER",
+        "period_month_current": "DECEMBER",
+        "report_month": "DECEMBER",
+    }
+    assert _period_month_context("Sep-25 to Nov-25")["report_month"] == "NOVEMBER"

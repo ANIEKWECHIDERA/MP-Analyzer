@@ -72,6 +72,8 @@ def test_build_report_analysis_describes_declines_and_branch_contribution() -> N
         "DDA_branch_low": "Oro Ago",
         "DDA_branch_high_perc": "24",
         "DDA_branch_low_perc": "9",
+        "DDA_branch_high_var": "₦1.25B",
+        "DDA_branch_low_var": "₦-430.50M",
         "SAV_value1": "24.31B",
         "SAV_value2": "25.10B",
         "SAV_value3": "26.00B",
@@ -108,5 +110,8 @@ def test_build_report_analysis_describes_declines_and_branch_contribution() -> N
 
     assert "DDA declined to 65.00B" in template_context["DDA_summary"]
     assert "Maitama 2 led the zone with 24% contribution" in template_context["DDA_summary"]
+    assert "a Positive MOM variance of ₦1.25B" in template_context["DDA_summary"]
+    assert "a Negative MOM variance of ₦-430.50M" in template_context["DDA_summary"]
     assert "Agency Banking declined from 72.69M to 58.53M" in template_context["AB_summary"]
     assert "Month-on-month variance was adverse at (14.16M)" in template_context["AB_summary"]
+    assert not template_context["AB_summary"].endswith(".")
