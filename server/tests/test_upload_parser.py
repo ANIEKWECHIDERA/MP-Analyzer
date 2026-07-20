@@ -132,6 +132,44 @@ def test_upload_parser_requires_manual_structure_match(tmp_path: Path) -> None:
         settings.fallback_structure_path = original_fallback
 
 
+def test_upload_parser_uses_uploaded_workbook_period_for_detected_label(tmp_path: Path) -> None:
+    structure = pd.DataFrame(
+        columns=[
+            "ZONES",
+            "BRANCHES",
+            "PBT 2025 YTD  ACHVD",
+            "DDA Jul-25",
+            "SAV Jul-25",
+            "FD Jul-25",
+            "DP Jul-25",
+            "LEGACY Dec-25",
+            "LEGACY May-26",
+        ]
+    )
+    structure_path = tmp_path / "mpaStructure.xlsx"
+    structure.to_excel(structure_path, index=False)
+
+    upload_rows = [
+        ["meta", "", "", "", "", "", "", "", ""],
+        ["meta", "", "", "", "", "", "", "", ""],
+        ["meta", "", "", "", "", "", "", "", ""],
+        ["ZONES", "BRANCHES", "DDA Apr-26", "DDA May-26", "DDA Jun-26", "SAV Apr-26", "SAV May-26", "SAV Jun-26", "PBT 2025 YTD  ACHVD"],
+        ["meta", "", "", "", "", "", "", "", ""],
+        ["Apapa Total", "Apapa Main", "10", "20", "30", "40", "50", "60", "100"],
+    ]
+    upload_path = tmp_path / "upload.xlsx"
+    pd.DataFrame(upload_rows).to_excel(upload_path, header=False, index=False)
+
+    original_fallback = settings.fallback_structure_path
+    settings.fallback_structure_path = str(structure_path)
+    try:
+        parsed = parse_uploaded_workbook(str(upload_path))
+    finally:
+        settings.fallback_structure_path = original_fallback
+
+    assert parsed.detected_period_label == "Apr-26 to Jun-26"
+
+
 def test_resolve_manual_alias_mapping_prefers_correct_manual_blocks() -> None:
     headers = [
         "ZONES",

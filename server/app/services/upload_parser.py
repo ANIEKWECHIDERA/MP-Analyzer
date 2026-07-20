@@ -660,6 +660,9 @@ def _parse_structure_workbook(path: str) -> tuple[pd.DataFrame, int, list[str], 
 
 def parse_uploaded_workbook(path: str) -> ParsedWorkbook:
     logger.info("[Parser] Starting manual structure parse for '%s'.", path)
+    raw = _read_raw_table(path)
+    raw_header_index = _detect_header_row(raw)
+    raw_headers = _compose_headers(raw, raw_header_index)
     structure_frame, structure_header_index, structure_headers, structure_mapping, structure_source_path = _parse_structure_workbook(path)
     chosen_frame = _normalize_dataframe_values(structure_frame)
     chosen_header_index = structure_header_index
@@ -680,7 +683,7 @@ def parse_uploaded_workbook(path: str) -> ParsedWorkbook:
         header_row_index=chosen_header_index,
         mapped_fields=chosen_mapping,
         missing_fields=missing_fields,
-        detected_period_label=_detected_period_label(chosen_headers),
+        detected_period_label=_detected_period_label(raw_headers),
         zones=zones,
         structure_source_path=structure_source_path,
     )

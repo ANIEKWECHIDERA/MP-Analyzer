@@ -1414,3 +1414,21 @@ This document was produced by following these inspection steps:
     - `AB_value3_r`
     - `AB_value2_r`
     - `AB_summary_1`
+
+
+## 2026-07-20 Uploaded-Workbook Period Detection Fix
+- Fixed manual-structure mode so `detected_period_label` now comes from the uploaded workbook's raw headers instead of the saved structure headers.
+- Root cause:
+  - the active edited structure file can retain mixed legacy month-bearing headers
+  - those saved structure headers caused period detection to drift to values like `Dec-25 to May-26`
+  - the raw June workbook itself was correctly exposing `Apr-26 to Jun-26`
+- Updated `server/app/services/upload_parser.py`:
+  - `parse_uploaded_workbook()` now reads the raw workbook headers first
+  - the parsed report still uses the manual structure for column mapping
+  - only the period-label source changed, improving month-name accuracy without breaking the manual workflow
+- Added regression coverage in `server/tests/test_upload_parser.py` to prove:
+  - a mismatched structure period does not override the uploaded workbook's actual period window
+- Verification:
+  - direct parse of `JUNE'26 ZONAL DISTRIBUTION FOR BRANCHES.xlsx` now returns:
+    - `Apr-26 to Jun-26`
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_upload_parser.py tests/test_reporting.py tests/test_analysis_narratives.py` -> `21 passed`
