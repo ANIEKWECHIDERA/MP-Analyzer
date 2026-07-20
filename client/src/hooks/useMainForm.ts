@@ -209,8 +209,9 @@ export const useMainForm = (
     try {
       for (const nextZone of zonesToGenerate) {
         const response = await generateReport(file, nextZone, profileId);
+        const contentTypeHeader = response.headers["content-type"];
         const blob = new Blob([response.data], {
-          type: response.headers["content-type"] || "application/octet-stream",
+          type: typeof contentTypeHeader === "string" ? contentTypeHeader : "application/octet-stream",
         });
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");

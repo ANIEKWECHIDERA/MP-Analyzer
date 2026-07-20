@@ -14,6 +14,7 @@ const SelectProfilePage: React.FC = () => {
   const [query, setQuery] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const stored = getStoredProfile();
@@ -25,9 +26,13 @@ const SelectProfilePage: React.FC = () => {
   useEffect(() => {
     const loadProfiles = async () => {
       setIsLoading(true);
+      setErrorMessage("");
       try {
         const result = await searchProfiles(query.trim());
         setProfiles(result);
+      } catch (error) {
+        setProfiles([]);
+        setErrorMessage(error instanceof Error ? error.message : "Unable to load profiles.");
       } finally {
         setIsLoading(false);
       }
@@ -53,7 +58,11 @@ const SelectProfilePage: React.FC = () => {
             </Link>
           </div>
 
-          {isLoading ? (
+          {errorMessage ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              {errorMessage}
+            </div>
+          ) : isLoading ? (
             <div className="space-y-3">
               <Skeleton className="h-14 w-full" />
               <Skeleton className="h-14 w-full" />

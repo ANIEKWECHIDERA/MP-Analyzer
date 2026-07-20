@@ -1135,3 +1135,282 @@ This document was produced by following these inspection steps:
   - `Potiskum recorded the lowest contribution at 4%, with a Positive MOM variance of ₦17.3M`
 - Verification:
   - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `12 passed`
+
+
+## 2026-04-13 Netlify Deployment Check
+- Checked `https://mp-analyzer.netlify.app`.
+- The site loads and redirects to `/profiles/select`, but the deployed profile page crashes with:
+  - `TypeError: r.map is not a function`
+- Network inspection showed the deployed frontend requested:
+  - `GET https://mp-analyzer.netlify.app/profiles`
+- Diagnosis:
+  - the deployed Netlify build is missing or misconfigured `VITE_API_URL`
+  - because the API base URL is missing, Axios uses a relative `/profiles` URL
+  - Netlify returns the React app HTML instead of backend JSON
+  - the profile screen then tries to call `.map()` on a non-array response
+- Client hardening added:
+  - `client/src/services/api.ts` validates that `/profiles` returns an array and throws a clear API configuration error otherwise
+  - `client/src/pages/SelectProfilePage.tsx` catches profile-loading errors and displays a visible error instead of crashing the whole page
+- Deployment action still required:
+  - set `VITE_API_URL` in Netlify to the deployed backend API URL
+  - rebuild/redeploy the Netlify site after setting the variable
+- Verification:
+  - `npm run build` passed from `client/`
+
+
+## 2026-07-17 Root Dev Entrypoint Rollback
+- Removed the temporary root-level `package.json` and `package-lock.json`.
+- The project is back to manual startup from the app directories:
+  - backend should be started from `server/`
+  - frontend should be started from `client/`
+- Reason:
+  - the helper script depended on a root `node_modules` install and was less reliable than the explicit per-app commands for this repo
+
+
+## 2026-07-20 June 2026 Template Conversion Prep
+- Used `JUNE 2026 MPR REVIEW FORMAT.docx` as the source-of-truth reference document.
+- Used `new mpa template.docx` as the in-progress target template.
+- The original target template file was locked, so the conversion was saved as a new file:
+  - `C:\Users\Chidera Aniekwe\Documents\new mpa template.converted.docx`
+- Also created a safety backup:
+  - `C:\Users\Chidera Aniekwe\Documents\new mpa template.backup.before-codex.docx`
+- Converted remaining narrative prose in the target template into placeholders for:
+  - PBT commentary (`PBT_summary_1` to `PBT_summary_3`)
+  - DDA commentary (`DDA_summary_1` to `DDA_summary_2`)
+  - Savings commentary (`SAV_summary_1` to `SAV_summary_3`)
+  - Fixed Deposit commentary (`FD_summary_1` to `FD_summary_2`)
+  - Domiciliary Deposit commentary (`DP_summary_1` to `DP_summary_2`)
+  - Total Risk Assets commentary (`TRA_summary_1` to `TRA_summary_3`)
+  - Agency Banking commentary (`AB_summary_1`)
+  - Accounts Opened summary (`AO_summary`)
+  - Cards summary (`CDS_summary`)
+  - Channels Enrolled summary (`CE_summary`)
+  - Agents Onboarded summary (`AOB_summary`)
+  - Dormant Accounts summary (`DMT_ACT_summary`)
+  - POS summary (`POS_summary`)
+  - NXP summary (`NXP_summary`)
+  - Final overall summary (`FINAL_summary_1` to `FINAL_summary_3`)
+- Added the two new requested top-level placeholders:
+  - `zone_branch_count`
+  - `zonal_head_name`
+- Fixed table placeholder consistency in the converted template:
+  - corrected PBT `% ON BUDGET` from `PBT_value2` to `PBT_value3`
+  - standardized month placeholders to lowercase backend-friendly names:
+    - `period_month_1`
+    - `period_month_2`
+    - `period_month_3`
+- Verified the converted template exposes the new placeholders through `docxtpl`.
+
+
+## 2026-07-20 June 2026 Template Wiring
+- Wired the new June 2026 template contract into the backend reporting pipeline.
+- Updated `server/app/services/reporting.py` to add:
+  - `zone_branch_count` derived from the branch rows under the selected zone
+  - `zonal_head_name` derived from the workbook column literally named `ZONAL HEAD`
+  - uppercase compatibility aliases required by the converted Word template:
+    - `ZONAL_HEAD_NAME`
+    - `PERIOD_MONTH_1`
+    - `PERIOD_MONTH_2`
+    - `PERIOD_MONTH_3`
+  - additional narrative helper context sourced from the workbook, including:
+    - negative-variance branch lists
+    - top budget-performing branches for DDA, SAV, FD, and DP
+    - LDR high/low branch signals
+    - accounts-opened summary signals
+    - active-branch count for agents onboarded
+- Rebuilt `server/app/analysis/narratives.py` so it now emits the June-style split placeholders expected by the new template:
+  - `PBT_summary_1` to `PBT_summary_3`
+  - `DDA_summary_1` to `DDA_summary_2`
+  - `SAV_summary_1` to `SAV_summary_3`
+  - `FD_summary_1` to `FD_summary_2`
+  - `DP_summary_1` to `DP_summary_2`
+  - `TRA_summary_1` to `TRA_summary_3`
+  - `AB_summary_1`
+  - `AO_summary`
+  - `CDS_summary`
+  - `CE_summary`
+  - `AOB_summary`
+  - `DMT_ACT_summary`
+  - `POS_summary`
+  - `NXP_summary`
+  - `FINAL_summary_1` to `FINAL_summary_3`
+- Preserved legacy aggregate summary keys as compatibility output while introducing the new split keys.
+- Updated `server/app/analysis/models.py` so generated summary paragraphs keep their punctuation, which matches the new template layout.
+- Updated the structure builder checklist in `client/src/pages/StructureBuilderPage.tsx` to include `ZONAL HEAD`, so the new required column is visible during structure tagging.
+- Fixed a frontend typing issue in `client/src/hooks/useMainForm.ts` uncovered during build verification.
+- Saved the converted live template as:
+  - `server/mpatemplate.june-2026.docx`
+- Updated template defaults to point at the new file:
+  - `server/app/config.py`
+  - `server/.env`
+- Important runtime note:
+  - `server/mpatemplate.docx` was locked by another process during implementation, so it could not be overwritten in place on July 20, 2026.
+  - the backend is now configured to use `server/mpatemplate.june-2026.docx` instead, which contains the converted June 2026 placeholders.
+- Verification:
+  - backend tests: `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py tests/test_reporting.py` -> `12 passed`
+  - frontend build: `npm run build` in `client/` -> passed
+  - verified the new template placeholder contract directly with `docxtpl` against `server/mpatemplate.june-2026.docx`
+
+
+## 2026-07-20 Apapa Metadata Fix
+- Investigated the incorrect `Apapa` output where the generated report showed:
+  - `BRANCH NO: 11`
+  - `ZONAL HEAD: nan`
+- Verified against:
+  - `C:\Users\Chidera Aniekwe\Documents\JUNE'26 ZONAL DISTRIBUTION FOR BRANCHES.xlsx`
+  - `C:\Users\Chidera Aniekwe\Documents\JUNE 2026 MPR REVIEW FORMAT.docx`
+- Root cause:
+  - branch selection logic was using substring matching on `ZONES`, so `Apapa` was incorrectly pulling in `Apapa 2` rows
+  - zonal head was being read from the `... Total` summary row, where the workbook cell is blank
+- Fix applied in `server/app/services/reporting.py`:
+  - branch rows are now matched by exact zone name after removing the `Total` suffix
+  - blank `BRANCHES` rows are excluded from branch counting
+  - `zonal_head_name` now falls back to the first non-empty `ZONAL HEAD` value from the matched branch rows
+- Added regression coverage in `server/tests/test_reporting.py` for the overlapping-zone-name case (`Apapa` vs `Apapa 2`).
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py` -> `13 passed`
+  - regenerated report now shows:
+    - `BRANCH NO: 7`
+    - `ZONAL HEAD: ROBERT ORAGBON`
+  - regenerated file saved to:
+    - `server/generated-reports/APAPA_Report_fixed.docx`
+
+
+## 2026-07-20 Narrative Language Pass
+- Updated `server/app/services/reporting.py` so the PBT narrative context now includes:
+  - `PBT_negative_mom_branches`
+  instead of only the previous `PBT_negative_mom_branch_count`.
+- Updated `server/app/analysis/narratives.py` so the PBT summary now lists the branches with negative MOM variance and their figures directly, instead of only stating the branch count.
+- Updated `server/app/analysis/narratives.py` so:
+  - `Domiciliary Deposits` narrative lines use `$`
+  - `NXP` narrative lines use `$`
+- Refreshed `server/tests/test_analysis_narratives.py` to assert:
+  - the branch-by-branch negative MOM wording in `PBT_summary_3`
+  - dollar-prefixed DP summary text
+  - dollar-prefixed NXP summary text
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py tests/test_reporting.py` -> `13 passed`
+  - regenerated report saved to:
+    - `server/generated-reports/APAPA_Report_language-pass.docx`
+  - verified rendered output examples:
+    - `Expected run rate settled at ₦113.47B, while cost-to-income ratio closed at 73%. Branches with negative MOM variance in the current month include Creek Road (₦208.26M), Trinity 2 (₦51.48M), Apapa (₦42.97M), Trinity 1 (₦33.28M), and Marine Road (₦25.98M).`
+    - `NXP closed at $7.3M in December, from $16.58M in November, while the year-on-year variance closed at $34.12M.`
+
+
+## 2026-07-20 Dynamic Table Font Colouring Phase 1
+- Implemented dynamic month-trend font colouring for table values in `server/app/services/reporting.py`.
+- Rule implemented:
+  - month 2 is compared against month 1
+  - month 3 is compared against month 2
+  - if the newer value is higher, the newer month is coloured green
+  - if the newer value is lower, the newer month is coloured red
+  - if the values are equal, the newer month remains black
+- Added a `_trend_rich_text()` helper that emits `docxtpl.RichText` with:
+  - green: `008000`
+  - red: `FF0000`
+  - neutral: `000000`
+- Preserved plain string month values for narratives and added parallel rich-text context keys for table rendering:
+  - `DDA_value2_r`, `DDA_value3_r`
+  - `SAV_value2_r`, `SAV_value3_r`
+  - `FD_value2_r`, `FD_value3_r`
+  - `DP_value2_r`, `DP_value3_r`
+  - `TRA_value2_r`, `TRA_value3_r`
+  - `NXP_value2_r`, `NXP_value3_r`
+- Updated `server/mpatemplate.june-2026.docx` placeholders so the month 2 / month 3 cells now use `{{r ...}}` rich-text tags for the trend-sensitive fields above.
+- Added regression coverage in `server/tests/test_reporting.py` for rich-text colour output.
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py` -> `14 passed`
+  - regenerated report saved to:
+    - `server/generated-reports/APAPA_Report_colored.docx`
+  - verified the rendered `.docx` XML contains both:
+    - `008000`
+    - `FF0000`
+
+
+## 2026-07-20 Currency-In-Table And Agency Banking Colouring Pass
+- Moved table currency signs out of the Word template and into backend-rendered values.
+- Updated `server/app/services/reporting.py` so monetary table fields now carry their own signs:
+  - `₦` for naira-denominated table values
+  - `$` for Domiciliary Deposit and NXP table values
+- Updated the rich-text trend helper so the sign and the numeric value are rendered in the same colored run.
+- Added Agency Banking month comparison support:
+  - `AB_value2_r` now compares the second month against the first month
+  - the Agency Banking month-2 value is colored using the same red/green rule
+- Rebuilt `server/mpatemplate.june-2026.docx` safely from the converted source template after an intermediate XML patch corrupted the document structure.
+- Reapplied the rich-text placeholders through structured XML editing rather than raw regex replacement.
+- Template outcome after the rebuild:
+  - hardcoded table currency runs were removed for the backend-driven monetary placeholders
+  - only the remaining section-label currency text stayed in the template
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py` -> `14 passed`
+  - regenerated report saved to:
+    - `server/generated-reports/APAPA_Report_currency-colored.docx`
+  - verified in the rendered `.docx` XML:
+    - green trend runs: `008000`
+    - red trend runs: `FF0000`
+    - backend-driven dollar table values such as `$61.73M`, `$65.69M`, `$16.58M`, `$7.3M`
+
+
+## 2026-07-20 Variance Colour Rule
+- Implemented the next table-colour rule for variance cells:
+  - negative YOY/YTD variance values render in red
+  - positive YOY/YTD variance values render in green
+- Added a dedicated variance formatter split in `server/app/services/reporting.py`:
+  - `_format_variance_text()` for narrative-safe plain values
+  - `_variance_rich_text()` for table rendering with colour and currency sign in the same run
+- Negative table variance values now use accounting-style parentheses in the rendered table values.
+- Added rich-text table placeholders for:
+  - `PBT_value4_r`
+  - `DDA_value5_r`
+  - `SAV_value5_r`
+  - `FD_value5_r`
+  - `DP_value5_r`
+  - `TRA_value5_r`
+  - `NXP_value4_r`
+- Reused the existing Agency Banking month-2 colour rule from the prior pass.
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py` -> `14 passed`
+  - regenerated report saved to:
+    - `server/generated-reports/APAPA_Report_variance-colored.docx`
+  - verified rendered XML includes:
+    - green runs: `008000`
+    - red runs: `FF0000`
+    - negative variance examples such as `($95.2M)` and `($34.12M)` in the table output
+
+
+## 2026-07-20 Variance Display Calibration
+- Adjusted the YOY/YTD variance display style to match the desired preview format:
+  - the rendered value now shows only the number and currency sign
+  - accounting parentheses are no longer shown in the table output
+  - colour still follows the original numeric sign, so negative values remain red and positive values remain green
+- Kept the sign-handling logic centralized in `server/app/services/reporting.py`:
+  - `_format_variance_text()` now returns the plain formatted magnitude for display
+  - `_variance_rich_text()` still applies the correct colour and currency sign in the same rich-text run
+- Verification:
+  - regenerated report saved to:
+    - `server/generated-reports/APAPA_Report_variance-no-parens.docx`
+  - verified rendered XML includes:
+    - `$95.2M`
+    - `$34.12M`
+    - `008000`
+    - `FF0000`
+  - verified rendered XML no longer includes:
+    - `($95.2M)`
+    - `($34.12M)`
+
+
+## 2026-07-20 Agency Banking Variance And Branch Pressure Pass
+- Applied the same no-parentheses variance display rule to the Agency Banking table.
+- Updated `server/mpatemplate.june-2026.docx` so Agency Banking variance now renders through `{{r AB_value3_r}}` instead of the plain `{{AB_value3}}` placeholder.
+- Extended `server/app/services/reporting.py` narrative context with:
+  - `AB_negative_variance_branches`
+- Tightened the analysis wording in `server/app/analysis/narratives.py` so branch-variance callouts are shorter and more direct across the key lines:
+  - `Negative branch pressure came from ...`
+  - `Negative MOM variance came from ...`
+  - explicit `No branch recorded ...` fallback where no negative branch variance exists
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py` -> `15 passed`
+  - confirmed the June template now exposes:
+    - `AB_value3_r`
+    - `AB_value2_r`
+    - `AB_summary_1`

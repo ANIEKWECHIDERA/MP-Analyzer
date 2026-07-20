@@ -11,6 +11,7 @@ import type { StructurePreview, StructureUploadResponse } from "@/types/types";
 import { CheckCircle2, FileSpreadsheet, Save, Search, Upload, X } from "lucide-react";
 
 const CONFIRMED_TAGS = [
+  "ZONAL HEAD",
   "PBT",
   "DDA",
   "SAV",
