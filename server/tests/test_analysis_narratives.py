@@ -60,6 +60,7 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
         "AB_value1": "58.53M",
         "AB_value2": "72.69M",
         "AB_value3": "14.16M",
+        "AB_negative_variance_branches": "Apapa (₦14.16M)",
         "AO_total_accounts": "745",
         "AO_value5": "145",
         "AO_value6": "600",
@@ -90,9 +91,10 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
 
     assert template_context["PBT_summary_1"].startswith("APAPA closed the review with PBT")
     assert "Apapa (₦8.17B)" in template_context["PBT_summary_2"]
-    assert "Branches with negative MOM variance in the current month include Apapa (₦1.20B), Creek Road (₦900M), and Trinity 2 (₦300M)." in template_context["PBT_summary_3"]
+    assert "Negative MOM variance came from Apapa (₦1.20B), Creek Road (₦900M), and Trinity 2 (₦300M)." in template_context["PBT_summary_3"]
     assert "$60.43M" in template_context["DP_summary_2"]
     assert "$14.16M" in template_context["NXP_summary_1"]
+    assert "Negative branch pressure came from Apapa (₦14.16M)." in template_context["AB_summary_1"]
     assert template_context["AO_summary_1"].startswith("The zone opened 745 accounts")
     assert template_context["FINAL_summary_3"].endswith("stronger note.")
     assert "ROBERT ORAGBON" in template_context["FINAL_summary_3"]
@@ -157,6 +159,7 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "AB_value1": "72.69M",
         "AB_value2": "58.53M",
         "AB_value3": "14.16M",
+        "AB_negative_variance_branches": "",
         "AO_total_accounts": "10",
         "AO_value5": "5",
         "AO_value6": "5",
@@ -189,3 +192,4 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
     assert "positive mom variance" in template_context["SAV_summary_3"].lower()
     assert "negative mom variance" in template_context["CE_summary_1"].lower()
     assert "No branch recorded a negative MOM variance in the current month." in template_context["PBT_summary_3"]
+    assert "No branch recorded a negative variance." in template_context["AB_summary_1"]

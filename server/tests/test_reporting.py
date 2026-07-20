@@ -14,6 +14,8 @@ from app.services.reporting import (
     _format_ratio_percentage,
     _format_zero_safe_millions,
     _period_month_context,
+    _trend_rich_text,
+    _variance_rich_text,
     _variance_label,
     _validate_report_columns,
 )
@@ -103,3 +105,19 @@ def test_branch_subset_and_narrative_context_exclude_similar_zone_names() -> Non
 
     assert context["zone_branch_count"] == "3"
     assert context["zonal_head_name"] == "ROBERT ORAGBON"
+
+
+def test_trend_rich_text_uses_green_red_and_default_black() -> None:
+    assert 'w:val="008000"' in str(_trend_rich_text("10M", Decimal("1"), Decimal("2")))
+    assert 'w:val="FF0000"' in str(_trend_rich_text("10M", Decimal("2"), Decimal("1")))
+    assert 'w:val="000000"' in str(_trend_rich_text("10M", Decimal("2"), Decimal("2")))
+
+
+def test_variance_rich_text_uses_color_without_parentheses() -> None:
+    negative = str(_variance_rich_text(Decimal("-14160"), "millions", "₦"))
+    positive = str(_variance_rich_text(Decimal("14160"), "millions", "₦"))
+
+    assert 'w:val="FF0000"' in negative
+    assert "₦14.16M" in negative
+    assert "(" not in negative
+    assert 'w:val="008000"' in positive

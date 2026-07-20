@@ -11,7 +11,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
-from docxtpl import DocxTemplate
+from docxtpl import DocxTemplate, RichText
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
@@ -399,6 +399,57 @@ def _format_reactivated_percentage(value: Decimal | None) -> str:
     return f"{numeric:.0f}"
 
 
+def _signed_value(display_value: str, currency: str) -> str:
+    return f"{currency}{display_value}"
+
+
+def _format_variance_text(value: Decimal | None, formatter: str) -> str:
+    numeric = value or Decimal("0")
+    absolute = abs(numeric)
+    if formatter == "billions":
+        rendered = format_billions(absolute)
+    elif formatter == "dp":
+        rendered = format_dp_millions(absolute)
+    elif formatter == "millions":
+        rendered = format_millions(absolute)
+    else:
+        rendered = f"{absolute:,.2f}"
+    return rendered
+
+
+def _trend_rich_text(
+    display_value: str,
+    previous_value: Decimal | None,
+    current_value: Decimal | None,
+    currency: str = "",
+) -> RichText:
+    color = "000000"
+    if previous_value is not None and current_value is not None:
+        if current_value > previous_value:
+            color = "008000"
+        elif current_value < previous_value:
+            color = "FF0000"
+
+    rich_text = RichText()
+    rich_text.add(f"{currency}{display_value}", color=color, bold=True, font="Arial Narrow")
+    return rich_text
+
+
+def _variance_rich_text(
+    value: Decimal | None,
+    formatter: str,
+    currency: str,
+) -> RichText:
+    numeric = value or Decimal("0")
+    plain = _format_variance_text(numeric, formatter)
+    display_value = f"{currency}{plain}"
+
+    color = "FF0000" if numeric < 0 else "008000"
+    rich_text = RichText()
+    rich_text.add(display_value, color=color, bold=True, font="Arial Narrow")
+    return rich_text
+
+
 def _currency(value: str) -> str:
     text = normalize_text(value)
     return text if text.startswith("₦") else f"₦{text}"
@@ -630,6 +681,7 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
         "SAV_negative_ytd_branches": _join_readable(_negative_branch_entries(branch_rows, "SAV YTD Variance", "billions")),
         "FD_negative_mom_branches": _join_readable(_negative_branch_entries(branch_rows, "FD MOM Variance", "billions")),
         "DP_negative_ytd_branches": _join_readable(_negative_branch_entries(branch_rows, "DP YTD Variance", "dp")),
+        "AB_negative_variance_branches": _join_readable(_negative_branch_entries(branch_rows, "AB VAR", "millions")),
         "DDA_top_budget_branch": dda_top[0] if dda_top else "",
         "DDA_top_budget_pct": f"{dda_top[1]:,.0f}" if dda_top else "0",
         "SAV_top_budget_branch": sav_top[0] if sav_top else "",
@@ -760,7 +812,7 @@ def _validate_report_columns(parsed: ParsedWorkbook, zone_name: str) -> None:
         )
 
 
-def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
+def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
     logger.info(
         "[Report] Building template context for zone '%s'. Structure='%s'. Detected period='%s'.",
         zone_name,
@@ -791,46 +843,64 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
 
     context = {
         "title": title,
-        "PBT_value1": format_billions(pbt_achieved),
-        "PBT_value2": format_billions(pbt_budget),
+        "PBT_value1": _signed_value(format_billions(pbt_achieved), "₦"),
+        "PBT_value2": _signed_value(format_billions(pbt_budget), "₦"),
         "PBT_value3": f"{((pbt_achieved / pbt_budget) * Decimal('100')):,.0f}" if pbt_budget else "0",
-        "PBT_value4": format_billions(value("PBT 2025 YOY VAR")),
-        "PBT_value5": format_billions(value("PBT Exp Run Rate")),
+        "PBT_value4": _format_variance_text(value("PBT 2025 YOY VAR"), "billions"),
+        "PBT_value4_r": _variance_rich_text(value("PBT 2025 YOY VAR"), "billions", "₦"),
+        "PBT_value5": _signed_value(format_billions(value("PBT Exp Run Rate")), "₦"),
         "PBT_value6": _format_ratio_percentage(value("PBT Cost to Income Ratio")),
         "PBT_summary": "Insert PBT Summary Here",
-        "DDA_value1": format_billions(value("DDA May-25")),
-        "DDA_value2": format_billions(value("DDA Jun-25")),
-        "DDA_value3": format_billions(dda_current),
+        "DDA_value1": _signed_value(format_billions(value("DDA May-25")), "₦"),
+        "DDA_value2": _signed_value(format_billions(value("DDA Jun-25")), "₦"),
+        "DDA_value3": _signed_value(format_billions(dda_current), "₦"),
+        "DDA_value2_r": _trend_rich_text(format_billions(value("DDA Jun-25")), value("DDA May-25"), value("DDA Jun-25"), "₦"),
+        "DDA_value3_r": _trend_rich_text(format_billions(dda_current), value("DDA Jun-25"), dda_current, "₦"),
         "DDA_value4": f"{((dda_current / dda_budget) * Decimal('100')):,.0f}" if dda_budget else "0",
-        "DDA_value5": _format_magnitude_billions(value("DDA YTD Variance")),
+        "DDA_value5": _format_variance_text(value("DDA YTD Variance"), "billions"),
+        "DDA_value5_r": _variance_rich_text(value("DDA YTD Variance"), "billions", "₦"),
         "DDA_summary": "Insert DDA Summary Here",
-        "SAV_value1": format_billions(value("SAV May-25")),
-        "SAV_value2": format_billions(value("SAV Jun-25")),
-        "SAV_value3": format_billions(sav_current),
+        "SAV_value1": _signed_value(format_billions(value("SAV May-25")), "₦"),
+        "SAV_value2": _signed_value(format_billions(value("SAV Jun-25")), "₦"),
+        "SAV_value3": _signed_value(format_billions(sav_current), "₦"),
+        "SAV_value2_r": _trend_rich_text(format_billions(value("SAV Jun-25")), value("SAV May-25"), value("SAV Jun-25"), "₦"),
+        "SAV_value3_r": _trend_rich_text(format_billions(sav_current), value("SAV Jun-25"), sav_current, "₦"),
         "SAV_value4": f"{((sav_current / sav_budget) * Decimal('100')):,.0f}" if sav_budget else "0",
-        "SAV_value5": _format_magnitude_billions(value("SAV YTD Variance")),
+        "SAV_value5": _format_variance_text(value("SAV YTD Variance"), "billions"),
+        "SAV_value5_r": _variance_rich_text(value("SAV YTD Variance"), "billions", "₦"),
         "SAV_summary": "Insert SAV Summary Here",
-        "FD_value1": format_billions(value("FD May-25")),
-        "FD_value2": format_billions(value("FD Jun-25")),
-        "FD_value3": format_billions(fd_current),
+        "FD_value1": _signed_value(format_billions(value("FD May-25")), "₦"),
+        "FD_value2": _signed_value(format_billions(value("FD Jun-25")), "₦"),
+        "FD_value3": _signed_value(format_billions(fd_current), "₦"),
+        "FD_value2_r": _trend_rich_text(format_billions(value("FD Jun-25")), value("FD May-25"), value("FD Jun-25"), "₦"),
+        "FD_value3_r": _trend_rich_text(format_billions(fd_current), value("FD Jun-25"), fd_current, "₦"),
         "FD_value4": f"{((fd_current / fd_budget) * Decimal('100')):,.0f}" if fd_budget else "0",
-        "FD_value5": _format_magnitude_billions(value("FD YTD Variance")),
+        "FD_value5": _format_variance_text(value("FD YTD Variance"), "billions"),
+        "FD_value5_r": _variance_rich_text(value("FD YTD Variance"), "billions", "₦"),
         "FD_summary": "Insert FD Summary Here",
-        "DP_value1": format_dp_millions(value("DP May-25")),
-        "DP_value2": format_dp_millions(value("DP Jun-25")),
-        "DP_value3": format_dp_millions(dp_current),
+        "DP_value1": _signed_value(format_dp_millions(value("DP May-25")), "$"),
+        "DP_value2": _signed_value(format_dp_millions(value("DP Jun-25")), "$"),
+        "DP_value3": _signed_value(format_dp_millions(dp_current), "$"),
+        "DP_value2_r": _trend_rich_text(format_dp_millions(value("DP Jun-25")), value("DP May-25"), value("DP Jun-25"), "$"),
+        "DP_value3_r": _trend_rich_text(format_dp_millions(dp_current), value("DP Jun-25"), dp_current, "$"),
         "DP_value4": f"{((dp_current / dp_budget) * Decimal('100')):,.0f}" if dp_budget else "0",
-        "DP_value5": _format_magnitude_dp(value("DP YTD Variance")),
+        "DP_value5": _format_variance_text(value("DP YTD Variance"), "dp"),
+        "DP_value5_r": _variance_rich_text(value("DP YTD Variance"), "dp", "$"),
         "DP_summary": "Insert DP Summary Here",
-        "TRA_value1": format_billions(value("TRA May-25")),
-        "TRA_value2": format_billions(value("TRA Jun-25")),
-        "TRA_value3": format_billions(value("TRA Jul-25")),
+        "TRA_value1": _signed_value(format_billions(value("TRA May-25")), "₦"),
+        "TRA_value2": _signed_value(format_billions(value("TRA Jun-25")), "₦"),
+        "TRA_value3": _signed_value(format_billions(value("TRA Jul-25")), "₦"),
+        "TRA_value2_r": _trend_rich_text(format_billions(value("TRA Jun-25")), value("TRA May-25"), value("TRA Jun-25"), "₦"),
+        "TRA_value3_r": _trend_rich_text(format_billions(value("TRA Jul-25")), value("TRA Jun-25"), value("TRA Jul-25"), "₦"),
         "TRA_value4": f"{_ratio_percent(tra_ratio):,.0f}",
-        "TRA_value5": _format_magnitude_billions(value("TRA YTD Variance")),
+        "TRA_value5": _format_variance_text(value("TRA YTD Variance"), "billions"),
+        "TRA_value5_r": _variance_rich_text(value("TRA YTD Variance"), "billions", "₦"),
         "TRA_summary": f"The Zone recorded a loan to Deposit Ratio of {format_percentage(tra_ratio)}% in the current period",
-        "AB_value1": format_millions(value("AB Jun-25")),
-        "AB_value2": format_millions(value("AB Jul-25")),
-        "AB_value3": _format_magnitude_millions(value("AB VAR")),
+        "AB_value1": _signed_value(format_millions(value("AB Jun-25")), "₦"),
+        "AB_value2": _signed_value(format_millions(value("AB Jul-25")), "₦"),
+        "AB_value2_r": _trend_rich_text(format_millions(value("AB Jul-25")), value("AB Jun-25"), value("AB Jul-25"), "₦"),
+        "AB_value3": _format_variance_text(value("AB VAR"), "millions"),
+        "AB_value3_r": _variance_rich_text(value("AB VAR"), "millions", "₦"),
         "AB_summary": "Insert AB Summary Here",
         "AO_value1": f"{value('AO C/A Opened - Funded'):,.0f}",
         "AO_value2": f"{value('AO S/A Opened - Funded'):,.0f}",
@@ -855,10 +925,13 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
         "POS_value3": f"{value('POS NEWLY DEPLOYED'):,.0f}",
         "POS_value4": f"{value('POS RETRIEVED'):,.0f}",
         "POS_summary": "Insert POS Summary Here",
-        "NXP_value1": _format_zero_safe_millions(value("NXP May-25")),
-        "NXP_value2": _format_zero_safe_millions(value("NXP Jun-25")),
-        "NXP_value3": _format_zero_safe_millions(value("NXP Jul-25")),
-        "NXP_value4": _format_magnitude_millions(value("NXP YOY VAR")),
+        "NXP_value1": _signed_value(_format_zero_safe_millions(value("NXP May-25")), "$"),
+        "NXP_value2": _signed_value(_format_zero_safe_millions(value("NXP Jun-25")), "$"),
+        "NXP_value3": _signed_value(_format_zero_safe_millions(value("NXP Jul-25")), "$"),
+        "NXP_value2_r": _trend_rich_text(_format_zero_safe_millions(value("NXP Jun-25")), value("NXP May-25"), value("NXP Jun-25"), "$"),
+        "NXP_value3_r": _trend_rich_text(_format_zero_safe_millions(value("NXP Jul-25")), value("NXP Jun-25"), value("NXP Jul-25"), "$"),
+        "NXP_value4": _format_variance_text(value("NXP YOY VAR"), "millions"),
+        "NXP_value4_r": _variance_rich_text(value("NXP YOY VAR"), "millions", "$"),
         "DMT_ACT_value1": f"{value('TOTAL_DMT_ACT'):,.0f}",
         "DMT_ACT_value2": f"{value('No. Reactivated DMT_ACT'):,.0f}",
         "DMT_ACT_value3": _format_reactivated_percentage(value("% Reactivated DMT_ACT")),

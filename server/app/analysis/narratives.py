@@ -130,25 +130,19 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
         ),
         (
             f"The zone recorded a YOY variance of {_naira(_value(context, 'PBT_value4'))}. "
-            + _optional_sentence(
-                (
-                    f"Branches with negative pressure in this line include {_value(context, 'PBT_negative_yoy_branches', '')}."
-                    if _value(context, "PBT_negative_yoy_branches", "")
-                    else ""
-                ),
-                "Branch-level profitability still requires tighter execution across the zone.",
+            + (
+                f"Negative branch pressure came from {_value(context, 'PBT_negative_yoy_branches')}."
+                if _value(context, "PBT_negative_yoy_branches", "")
+                else "No branch recorded a negative YOY variance."
             )
         ),
         (
             f"Expected run rate settled at {_naira(_value(context, 'PBT_value5'))}, while cost-to-income ratio closed at "
             f"{_value(context, 'PBT_value6')}%. "
-            + _optional_sentence(
-                (
-                    f"Branches with negative MOM variance in the current month include {_value(context, 'PBT_negative_mom_branches', '')}."
-                    if _value(context, "PBT_negative_mom_branches", "")
-                    else ""
-                ),
-                "No branch recorded a negative MOM variance in the current month.",
+            + (
+                f"Negative MOM variance came from {_value(context, 'PBT_negative_mom_branches')}."
+                if _value(context, "PBT_negative_mom_branches", "")
+                else "No branch recorded a negative MOM variance in the current month."
             )
         ),
     ]
@@ -165,13 +159,10 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
             f"DDA {_change_phrase(_value(context, 'DDA_value2'), _value(context, 'DDA_value3'))} to {_naira(_value(context, 'DDA_value3'))} in {report_month}, "
             f"from {_naira(_value(context, 'DDA_value2'))} in {previous_month}. The zone achieved {_value(context, 'DDA_value4')}% of budget and recorded a YTD variance of "
             f"{_naira(_value(context, 'DDA_value5'))}. "
-            + _optional_sentence(
-                (
-                    f"Negative pressure came from {_value(context, 'DDA_negative_ytd_branches', '')}."
-                    if _value(context, "DDA_negative_ytd_branches", "")
-                    else ""
-                ),
-                "The zone needs stronger branch-level contribution on DDA.",
+            + (
+                f"Negative branch pressure came from {_value(context, 'DDA_negative_ytd_branches')}."
+                if _value(context, "DDA_negative_ytd_branches", "")
+                else "No branch recorded a negative YTD variance."
             )
         ),
     ]
@@ -187,13 +178,10 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
         (
             f"Savings closed at {_naira(_value(context, 'SAV_value3'))} in {report_month}, compared with {_naira(_value(context, 'SAV_value2'))} in {previous_month}. "
             f"The zone achieved {_value(context, 'SAV_value4')}% of budget and recorded a YTD variance of {_naira(_value(context, 'SAV_value5'))}. "
-            + _optional_sentence(
-                (
-                    f"Negative performance was recorded in {_value(context, 'SAV_negative_ytd_branches', '')}."
-                    if _value(context, "SAV_negative_ytd_branches", "")
-                    else ""
-                ),
-                "The savings line still needs broader branch participation.",
+            + (
+                f"Negative branch pressure came from {_value(context, 'SAV_negative_ytd_branches')}."
+                if _value(context, "SAV_negative_ytd_branches", "")
+                else "No branch recorded a negative YTD variance."
             )
         ),
         (
@@ -214,13 +202,10 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
             f"Fixed Deposit {_change_phrase(_value(context, 'FD_value2'), _value(context, 'FD_value3'))} to {_naira(_value(context, 'FD_value3'))} in {report_month}, "
             f"after closing {_naira(_value(context, 'FD_value2'))} in {previous_month}. The zone achieved {_value(context, 'FD_value4')}% of budget and recorded a YTD variance of "
             f"{_naira(_value(context, 'FD_value5'))}. "
-            + _optional_sentence(
-                (
-                    f"Negative MOM pressure was driven by {_value(context, 'FD_negative_mom_branches', '')}."
-                    if _value(context, "FD_negative_mom_branches", "")
-                    else ""
-                ),
-                "The fixed deposit line needs a stronger branch-level recovery.",
+            + (
+                f"Negative MOM pressure came from {_value(context, 'FD_negative_mom_branches')}."
+                if _value(context, "FD_negative_mom_branches", "")
+                else "No branch recorded a negative MOM variance."
             )
         ),
     ]
@@ -236,13 +221,10 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
         (
             f"Domiciliary Deposits closed at {_dollar(_value(context, 'DP_value3'))} in {report_month}, from {_dollar(_value(context, 'DP_value2'))} in {previous_month}. "
             f"The zone achieved {_value(context, 'DP_value4')}% of budget and recorded a YTD variance of {_dollar(_value(context, 'DP_value5'))}. "
-            + _optional_sentence(
-                (
-                    f"Branches with negative YTD pressure include {_value(context, 'DP_negative_ytd_branches', '')}."
-                    if _value(context, "DP_negative_ytd_branches", "")
-                    else ""
-                ),
-                "Branch-level support is still required to improve the DP line.",
+            + (
+                f"Negative branch pressure came from {_value(context, 'DP_negative_ytd_branches')}."
+                if _value(context, "DP_negative_ytd_branches", "")
+                else "No branch recorded a negative YTD variance."
             )
         ),
     ]
@@ -264,7 +246,12 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
     ab_summary = [
         (
             f"Agency Banking closed at {_naira(_value(context, 'AB_value2'))} in {report_month}, compared with {_naira(_value(context, 'AB_value1'))} in {previous_month}, "
-            f"translating to a {_variance_label_from_change(_value(context, 'AB_value1'), _value(context, 'AB_value2')).lower()} of {_naira(_value(context, 'AB_value3'))}."
+            f"translating to a {_variance_label_from_change(_value(context, 'AB_value1'), _value(context, 'AB_value2')).lower()} of {_naira(_value(context, 'AB_value3'))}. "
+            + (
+                f"Negative branch pressure came from {_value(context, 'AB_negative_variance_branches')}."
+                if _value(context, "AB_negative_variance_branches", "")
+                else "No branch recorded a negative variance."
+            )
         ),
     ]
 
