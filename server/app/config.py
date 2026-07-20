@@ -14,7 +14,7 @@ class Settings(BaseSettings):
         "YOUR_SUPABASE_HOST:6543/postgres"
     )
     cors_origins: str = "*"
-    template_path: str = str(BASE_DIR / "mpatemplate.docx")
+    template_path: str = str(BASE_DIR / "mpatemplate.june-2026.docx")
     fallback_structure_path: str = str(BASE_DIR / "mpaStructure.xlsx")
     schema_version: str = "v1"
 

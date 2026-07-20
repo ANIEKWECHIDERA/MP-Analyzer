@@ -14,11 +14,20 @@ export const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
+const ensureArray = <T>(value: unknown, endpoint: string): T[] => {
+  if (Array.isArray(value)) {
+    return value as T[];
+  }
+  throw new Error(
+    `Unexpected response from ${endpoint}. Check that VITE_API_URL points to the backend API, not the frontend site.`
+  );
+};
+
 export const searchProfiles = async (query: string) => {
-  const response = await api.get<Profile[]>("/profiles", {
+  const response = await api.get<unknown>("/profiles", {
     params: query ? { query } : {},
   });
-  return response.data;
+  return ensureArray<Profile>(response.data, "/profiles");
 };
 
 export const createProfile = async (payload: ProfileCreateInput) => {

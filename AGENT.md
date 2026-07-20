@@ -1135,3 +1135,163 @@ This document was produced by following these inspection steps:
   - `Potiskum recorded the lowest contribution at 4%, with a Positive MOM variance of ₦17.3M`
 - Verification:
   - `pytest tests/test_analysis_narratives.py tests/test_reporting.py` passed from `server/`: `12 passed`
+
+
+## 2026-04-13 Netlify Deployment Check
+- Checked `https://mp-analyzer.netlify.app`.
+- The site loads and redirects to `/profiles/select`, but the deployed profile page crashes with:
+  - `TypeError: r.map is not a function`
+- Network inspection showed the deployed frontend requested:
+  - `GET https://mp-analyzer.netlify.app/profiles`
+- Diagnosis:
+  - the deployed Netlify build is missing or misconfigured `VITE_API_URL`
+  - because the API base URL is missing, Axios uses a relative `/profiles` URL
+  - Netlify returns the React app HTML instead of backend JSON
+  - the profile screen then tries to call `.map()` on a non-array response
+- Client hardening added:
+  - `client/src/services/api.ts` validates that `/profiles` returns an array and throws a clear API configuration error otherwise
+  - `client/src/pages/SelectProfilePage.tsx` catches profile-loading errors and displays a visible error instead of crashing the whole page
+- Deployment action still required:
+  - set `VITE_API_URL` in Netlify to the deployed backend API URL
+  - rebuild/redeploy the Netlify site after setting the variable
+- Verification:
+  - `npm run build` passed from `client/`
+
+
+## 2026-07-17 Root Dev Entrypoint Rollback
+- Removed the temporary root-level `package.json` and `package-lock.json`.
+- The project is back to manual startup from the app directories:
+  - backend should be started from `server/`
+  - frontend should be started from `client/`
+- Reason:
+  - the helper script depended on a root `node_modules` install and was less reliable than the explicit per-app commands for this repo
+
+
+## 2026-07-20 June 2026 Template Conversion Prep
+- Used `JUNE 2026 MPR REVIEW FORMAT.docx` as the source-of-truth reference document.
+- Used `new mpa template.docx` as the in-progress target template.
+- The original target template file was locked, so the conversion was saved as a new file:
+  - `C:\Users\Chidera Aniekwe\Documents\new mpa template.converted.docx`
+- Also created a safety backup:
+  - `C:\Users\Chidera Aniekwe\Documents\new mpa template.backup.before-codex.docx`
+- Converted remaining narrative prose in the target template into placeholders for:
+  - PBT commentary (`PBT_summary_1` to `PBT_summary_3`)
+  - DDA commentary (`DDA_summary_1` to `DDA_summary_2`)
+  - Savings commentary (`SAV_summary_1` to `SAV_summary_3`)
+  - Fixed Deposit commentary (`FD_summary_1` to `FD_summary_2`)
+  - Domiciliary Deposit commentary (`DP_summary_1` to `DP_summary_2`)
+  - Total Risk Assets commentary (`TRA_summary_1` to `TRA_summary_3`)
+  - Agency Banking commentary (`AB_summary_1`)
+  - Accounts Opened summary (`AO_summary`)
+  - Cards summary (`CDS_summary`)
+  - Channels Enrolled summary (`CE_summary`)
+  - Agents Onboarded summary (`AOB_summary`)
+  - Dormant Accounts summary (`DMT_ACT_summary`)
+  - POS summary (`POS_summary`)
+  - NXP summary (`NXP_summary`)
+  - Final overall summary (`FINAL_summary_1` to `FINAL_summary_3`)
+- Added the two new requested top-level placeholders:
+  - `zone_branch_count`
+  - `zonal_head_name`
+- Fixed table placeholder consistency in the converted template:
+  - corrected PBT `% ON BUDGET` from `PBT_value2` to `PBT_value3`
+  - standardized month placeholders to lowercase backend-friendly names:
+    - `period_month_1`
+    - `period_month_2`
+    - `period_month_3`
+- Verified the converted template exposes the new placeholders through `docxtpl`.
+
+
+## 2026-07-20 June 2026 Template Wiring
+- Wired the new June 2026 template contract into the backend reporting pipeline.
+- Updated `server/app/services/reporting.py` to add:
+  - `zone_branch_count` derived from the branch rows under the selected zone
+  - `zonal_head_name` derived from the workbook column literally named `ZONAL HEAD`
+  - uppercase compatibility aliases required by the converted Word template:
+    - `ZONAL_HEAD_NAME`
+    - `PERIOD_MONTH_1`
+    - `PERIOD_MONTH_2`
+    - `PERIOD_MONTH_3`
+  - additional narrative helper context sourced from the workbook, including:
+    - negative-variance branch lists
+    - top budget-performing branches for DDA, SAV, FD, and DP
+    - LDR high/low branch signals
+    - accounts-opened summary signals
+    - active-branch count for agents onboarded
+- Rebuilt `server/app/analysis/narratives.py` so it now emits the June-style split placeholders expected by the new template:
+  - `PBT_summary_1` to `PBT_summary_3`
+  - `DDA_summary_1` to `DDA_summary_2`
+  - `SAV_summary_1` to `SAV_summary_3`
+  - `FD_summary_1` to `FD_summary_2`
+  - `DP_summary_1` to `DP_summary_2`
+  - `TRA_summary_1` to `TRA_summary_3`
+  - `AB_summary_1`
+  - `AO_summary`
+  - `CDS_summary`
+  - `CE_summary`
+  - `AOB_summary`
+  - `DMT_ACT_summary`
+  - `POS_summary`
+  - `NXP_summary`
+  - `FINAL_summary_1` to `FINAL_summary_3`
+- Preserved legacy aggregate summary keys as compatibility output while introducing the new split keys.
+- Updated `server/app/analysis/models.py` so generated summary paragraphs keep their punctuation, which matches the new template layout.
+- Updated the structure builder checklist in `client/src/pages/StructureBuilderPage.tsx` to include `ZONAL HEAD`, so the new required column is visible during structure tagging.
+- Fixed a frontend typing issue in `client/src/hooks/useMainForm.ts` uncovered during build verification.
+- Saved the converted live template as:
+  - `server/mpatemplate.june-2026.docx`
+- Updated template defaults to point at the new file:
+  - `server/app/config.py`
+  - `server/.env`
+- Important runtime note:
+  - `server/mpatemplate.docx` was locked by another process during implementation, so it could not be overwritten in place on July 20, 2026.
+  - the backend is now configured to use `server/mpatemplate.june-2026.docx` instead, which contains the converted June 2026 placeholders.
+- Verification:
+  - backend tests: `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py tests/test_reporting.py` -> `12 passed`
+  - frontend build: `npm run build` in `client/` -> passed
+  - verified the new template placeholder contract directly with `docxtpl` against `server/mpatemplate.june-2026.docx`
+
+
+## 2026-07-20 Apapa Metadata Fix
+- Investigated the incorrect `Apapa` output where the generated report showed:
+  - `BRANCH NO: 11`
+  - `ZONAL HEAD: nan`
+- Verified against:
+  - `C:\Users\Chidera Aniekwe\Documents\JUNE'26 ZONAL DISTRIBUTION FOR BRANCHES.xlsx`
+  - `C:\Users\Chidera Aniekwe\Documents\JUNE 2026 MPR REVIEW FORMAT.docx`
+- Root cause:
+  - branch selection logic was using substring matching on `ZONES`, so `Apapa` was incorrectly pulling in `Apapa 2` rows
+  - zonal head was being read from the `... Total` summary row, where the workbook cell is blank
+- Fix applied in `server/app/services/reporting.py`:
+  - branch rows are now matched by exact zone name after removing the `Total` suffix
+  - blank `BRANCHES` rows are excluded from branch counting
+  - `zonal_head_name` now falls back to the first non-empty `ZONAL HEAD` value from the matched branch rows
+- Added regression coverage in `server/tests/test_reporting.py` for the overlapping-zone-name case (`Apapa` vs `Apapa 2`).
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py` -> `13 passed`
+  - regenerated report now shows:
+    - `BRANCH NO: 7`
+    - `ZONAL HEAD: ROBERT ORAGBON`
+  - regenerated file saved to:
+    - `server/generated-reports/APAPA_Report_fixed.docx`
+
+
+## 2026-07-20 Narrative Language Pass
+- Updated `server/app/services/reporting.py` so the PBT narrative context now includes:
+  - `PBT_negative_mom_branches`
+  instead of only the previous `PBT_negative_mom_branch_count`.
+- Updated `server/app/analysis/narratives.py` so the PBT summary now lists the branches with negative MOM variance and their figures directly, instead of only stating the branch count.
+- Updated `server/app/analysis/narratives.py` so:
+  - `Domiciliary Deposits` narrative lines use `$`
+  - `NXP` narrative lines use `$`
+- Refreshed `server/tests/test_analysis_narratives.py` to assert:
+  - the branch-by-branch negative MOM wording in `PBT_summary_3`
+  - dollar-prefixed DP summary text
+  - dollar-prefixed NXP summary text
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py tests/test_reporting.py` -> `13 passed`
+  - regenerated report saved to:
+    - `server/generated-reports/APAPA_Report_language-pass.docx`
+  - verified rendered output examples:
+    - `Expected run rate settled at ₦113.47B, while cost-to-income ratio closed at 73%. Branches with negative MOM variance in the current month include Creek Road (₦208.26M), Trinity 2 (₦51.48M), Apapa (₦42.97M), Trinity 1 (₦33.28M), and Marine Road (₦25.98M).`
+    - `NXP closed at $7.3M in December, from $16.58M in November, while the year-on-year variance closed at $34.12M.`

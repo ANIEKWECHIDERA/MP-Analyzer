@@ -17,4 +17,4 @@ class ReportAnalysis:
     sections: tuple[AnalysisSection, ...]
 
     def to_template_context(self) -> dict[str, str]:
-        return {section.key: section.summary.rstrip().rstrip(".") for section in self.sections}
+        return {section.key: section.summary.strip() for section in self.sections}

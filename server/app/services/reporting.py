@@ -18,7 +18,14 @@ from sqlalchemy.orm import Session
 from ..analysis import build_report_analysis
 from ..config import settings
 from ..models import ReportRun
-from .normalization import format_billions, format_dp_millions, format_millions, format_percentage, normalize_text, parse_numeric
+from .normalization import (
+    format_billions,
+    format_dp_millions,
+    format_millions,
+    format_percentage,
+    normalize_text,
+    parse_numeric,
+)
 from .profiles import get_profile
 from .upload_parser import (
     ParsedWorkbook,
@@ -424,10 +431,7 @@ def _period_month_context(period_label: str | None) -> dict[str, str]:
 
     if len(detected) >= 2:
         sequence = _month_sequence(detected[0], detected[-1])
-        if len(sequence) >= 3:
-            labels = [MONTH_NAMES[month] for month in sequence[-3:]]
-        else:
-            labels = [MONTH_NAMES[month] for month in sequence]
+        labels = [MONTH_NAMES[month] for month in sequence[-3:]] if len(sequence) >= 3 else [MONTH_NAMES[month] for month in sequence]
     elif len(detected) == 1:
         month_3 = detected[0]
         month_2 = _previous_month(month_3)
@@ -465,9 +469,185 @@ def _zone_rows(dataframe: pd.DataFrame, zone_name: str) -> pd.DataFrame:
 def _branch_subset(dataframe: pd.DataFrame, zone_name: str) -> pd.DataFrame:
     normalized_zone = re.sub(r"\s*total\s*$", "", zone_name, flags=re.IGNORECASE).strip().lower()
     return dataframe[
-        dataframe["ZONES"].fillna("").map(lambda value: normalized_zone in normalize_text(value).lower())
-        & ~dataframe["ZONES"].fillna("").map(lambda value: normalize_text(value).lower() == f"{normalized_zone} total")
+        dataframe["ZONES"].fillna("").map(lambda value: normalize_text(value).lower() == normalized_zone)
+        & dataframe["BRANCHES"].fillna("").map(lambda value: normalize_text(value) != "")
     ]
+
+
+def _branch_names(dataframe: pd.DataFrame) -> list[str]:
+    seen: list[str] = []
+    for raw_value in dataframe.get("BRANCHES", pd.Series(dtype=str)).tolist():
+        name = normalize_text(raw_value)
+        if name and name.lower() not in {"branch", "branches"} and name not in seen:
+            seen.append(name)
+    return seen
+
+
+def _ratio_percent(value: Decimal | None) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    return value * Decimal("100") if abs(value) <= 1 else value
+
+
+def _branch_budget_achievement(
+    dataframe: pd.DataFrame,
+    achieved_column: str,
+    budget_column: str,
+) -> tuple[str, Decimal] | None:
+    best_branch = ""
+    best_percentage: Decimal | None = None
+    for _, row in dataframe.iterrows():
+        achieved = parse_numeric(row.get(achieved_column))
+        budget = parse_numeric(row.get(budget_column))
+        branch = normalize_text(row.get("BRANCHES"))
+        if not branch or achieved is None or budget in (None, Decimal("0")):
+            continue
+        percentage = (achieved / budget) * Decimal("100")
+        if best_percentage is None or percentage > best_percentage:
+            best_percentage = percentage
+            best_branch = branch
+    if best_percentage is None:
+        return None
+    return best_branch, best_percentage
+
+
+def _negative_branch_entries(
+    dataframe: pd.DataFrame,
+    column: str,
+    formatter: str,
+    limit: int = 5,
+) -> list[str]:
+    entries: list[tuple[str, Decimal]] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        value = parse_numeric(row.get(column))
+        if not branch or value is None or value >= 0:
+            continue
+        entries.append((branch, abs(value)))
+
+    entries.sort(key=lambda item: item[1], reverse=True)
+    output: list[str] = []
+    for branch, value in entries[:limit]:
+        if formatter == "billions":
+            rendered = format_billions(value)
+            output.append(f"{branch} ({_currency(rendered)})")
+        elif formatter == "dp":
+            rendered = format_dp_millions(value)
+            output.append(f"{branch} ({_currency(rendered)})")
+        elif formatter == "millions":
+            rendered = format_millions(value)
+            output.append(f"{branch} ({_currency(rendered)})")
+        else:
+            output.append(f"{branch} ({value:,.0f})")
+    return output
+
+
+def _join_readable(items: list[str]) -> str:
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return f"{', '.join(items[:-1])}, and {items[-1]}"
+
+
+def _count_negative(dataframe: pd.DataFrame, column: str) -> int:
+    count = 0
+    for _, row in dataframe.iterrows():
+        value = parse_numeric(row.get(column))
+        if value is not None and value < 0:
+            count += 1
+    return count
+
+
+def _branch_extreme(dataframe: pd.DataFrame, column: str, highest: bool = True) -> tuple[str, Decimal] | None:
+    branch_name = ""
+    selected_value: Decimal | None = None
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        value = parse_numeric(row.get(column))
+        if not branch or value is None:
+            continue
+        if selected_value is None or (value > selected_value if highest else value < selected_value):
+            selected_value = value
+            branch_name = branch
+    if selected_value is None:
+        return None
+    return branch_name, selected_value
+
+
+def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_rows: pd.DataFrame) -> dict[str, str]:
+    branch_names = _branch_names(branch_rows)
+    zonal_head_name = "-"
+    if "ZONAL HEAD" in branch_rows.columns:
+        for raw_value in branch_rows["ZONAL HEAD"].tolist():
+            candidate = normalize_text(raw_value)
+            if candidate and candidate.lower() != "nan":
+                zonal_head_name = candidate
+                break
+    if zonal_head_name == "-":
+        fallback_candidate = normalize_text(zone_row.get("ZONAL HEAD"))
+        if fallback_candidate and fallback_candidate.lower() != "nan":
+            zonal_head_name = fallback_candidate
+    ao_current = parse_numeric(zone_row.get("AO C/A Opened - Total")) or Decimal("0")
+    ao_savings = parse_numeric(zone_row.get("AO S/A Opened - Total")) or Decimal("0")
+    ao_unfunded = (parse_numeric(zone_row.get("AO C/A Opened - Unfunded")) or Decimal("0")) + (
+        parse_numeric(zone_row.get("AO S/A Opened - Unfunded")) or Decimal("0")
+    )
+    ao_total = ao_current + ao_savings
+    ao_unfunded_share = (ao_unfunded / ao_total * Decimal("100")) if ao_total else Decimal("0")
+
+    branch_rows_with_totals = branch_rows.copy()
+    branch_rows_with_totals["__ao_total"] = branch_rows_with_totals.apply(
+        lambda item: (parse_numeric(item.get("AO C/A Opened - Total")) or Decimal("0"))
+        + (parse_numeric(item.get("AO S/A Opened - Total")) or Decimal("0")),
+        axis=1,
+    )
+    ao_low_branch = _branch_extreme(branch_rows_with_totals, "__ao_total", highest=False)
+
+    tra_high = _branch_extreme(branch_rows, "TRA Loan to Dep", highest=True)
+    tra_low = _branch_extreme(branch_rows, "TRA Loan to Dep", highest=False)
+
+    aob_active_branches = 0
+    for _, branch_row in branch_rows.iterrows():
+        if (parse_numeric(branch_row.get("AOB Jul-25")) or Decimal("0")) > 0:
+            aob_active_branches += 1
+
+    dda_top = _branch_budget_achievement(branch_rows, "DDA Jul-25", "DDA 2025 FULL YR BGT")
+    sav_top = _branch_budget_achievement(branch_rows, "SAV Jul-25", "SAV 2025 FULL YR BGT")
+    fd_top = _branch_budget_achievement(branch_rows, "FD Jul-25", "FD 2025 FULL YR BGT")
+    dp_top = _branch_budget_achievement(branch_rows, "DP Jul-25", "DP 2025 FULL YR BGT")
+
+    return {
+        "zone_branch_count": str(len(branch_names)),
+        "zonal_head_name": zonal_head_name,
+        "zone_base_name": re.sub(r"\s*total\s*$", "", zone_name, flags=re.IGNORECASE).strip(),
+        "PBT_negative_yoy_branches": _join_readable(_negative_branch_entries(branch_rows, "PBT 2025 YOY VAR", "billions")),
+        "PBT_negative_mom_branch_count": str(_count_negative(branch_rows, "PBT Mthly Var")),
+        "PBT_negative_mom_branches": _join_readable(_negative_branch_entries(branch_rows, "PBT Mthly Var", "billions")),
+        "DDA_negative_ytd_branches": _join_readable(_negative_branch_entries(branch_rows, "DDA YTD Variance", "billions")),
+        "SAV_negative_ytd_branches": _join_readable(_negative_branch_entries(branch_rows, "SAV YTD Variance", "billions")),
+        "FD_negative_mom_branches": _join_readable(_negative_branch_entries(branch_rows, "FD MOM Variance", "billions")),
+        "DP_negative_ytd_branches": _join_readable(_negative_branch_entries(branch_rows, "DP YTD Variance", "dp")),
+        "DDA_top_budget_branch": dda_top[0] if dda_top else "",
+        "DDA_top_budget_pct": f"{dda_top[1]:,.0f}" if dda_top else "0",
+        "SAV_top_budget_branch": sav_top[0] if sav_top else "",
+        "SAV_top_budget_pct": f"{sav_top[1]:,.0f}" if sav_top else "0",
+        "FD_top_budget_branch": fd_top[0] if fd_top else "",
+        "FD_top_budget_pct": f"{fd_top[1]:,.0f}" if fd_top else "0",
+        "DP_top_budget_branch": dp_top[0] if dp_top else "",
+        "DP_top_budget_pct": f"{dp_top[1]:,.0f}" if dp_top else "0",
+        "TRA_high_ldr_branch": tra_high[0] if tra_high else "",
+        "TRA_high_ldr_value": f"{_ratio_percent(tra_high[1]):,.0f}" if tra_high else "0",
+        "TRA_low_ldr_branch": tra_low[0] if tra_low else "",
+        "TRA_low_ldr_value": f"{_ratio_percent(tra_low[1]):,.0f}" if tra_low else "0",
+        "AO_total_accounts": f"{ao_total:,.0f}",
+        "AO_unfunded_share": f"{ao_unfunded_share:,.0f}",
+        "AO_low_branch": ao_low_branch[0] if ao_low_branch else "",
+        "AO_low_branch_total": f"{ao_low_branch[1]:,.0f}" if ao_low_branch else "0",
+        "AOB_active_branch_count": str(aob_active_branches),
+    }
 
 
 def _branch_metrics(zone_name: str, dataframe: pd.DataFrame) -> dict[str, str]:
@@ -589,7 +769,9 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
     )
     _validate_report_columns(parsed, zone_name)
     row = _zone_rows(parsed.dataframe, zone_name).iloc[0]
+    branch_rows = _branch_subset(parsed.dataframe, zone_name)
     branch_data = _branch_metrics(zone_name, parsed.dataframe)
+    narrative_context = _additional_narrative_context(zone_name, row, branch_rows)
 
     def value(column: str) -> Decimal:
         return parse_numeric(row[column]) or Decimal("0")
@@ -601,10 +783,10 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
     sav_budget = value("SAV 2025 FULL YR BGT")
     fd_budget = value("FD 2025 FULL YR BGT")
     dp_budget = value("DP 2025 FULL YR BGT")
-    dda_jul = value("DDA Jul-25")
-    sav_jul = value("SAV Jul-25")
-    fd_jul = value("FD Jul-25")
-    dp_jul = value("DP Jul-25")
+    dda_current = value("DDA Jul-25")
+    sav_current = value("SAV Jul-25")
+    fd_current = value("FD Jul-25")
+    dp_current = value("DP Jul-25")
     tra_ratio = value("TRA Loan to Dep")
 
     context = {
@@ -618,32 +800,32 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
         "PBT_summary": "Insert PBT Summary Here",
         "DDA_value1": format_billions(value("DDA May-25")),
         "DDA_value2": format_billions(value("DDA Jun-25")),
-        "DDA_value3": format_billions(dda_jul),
-        "DDA_value4": f"{((dda_jul / dda_budget) * Decimal('100')):,.0f}" if dda_budget else "0",
+        "DDA_value3": format_billions(dda_current),
+        "DDA_value4": f"{((dda_current / dda_budget) * Decimal('100')):,.0f}" if dda_budget else "0",
         "DDA_value5": _format_magnitude_billions(value("DDA YTD Variance")),
         "DDA_summary": "Insert DDA Summary Here",
         "SAV_value1": format_billions(value("SAV May-25")),
         "SAV_value2": format_billions(value("SAV Jun-25")),
-        "SAV_value3": format_billions(sav_jul),
-        "SAV_value4": f"{((sav_jul / sav_budget) * Decimal('100')):,.0f}" if sav_budget else "0",
+        "SAV_value3": format_billions(sav_current),
+        "SAV_value4": f"{((sav_current / sav_budget) * Decimal('100')):,.0f}" if sav_budget else "0",
         "SAV_value5": _format_magnitude_billions(value("SAV YTD Variance")),
         "SAV_summary": "Insert SAV Summary Here",
         "FD_value1": format_billions(value("FD May-25")),
         "FD_value2": format_billions(value("FD Jun-25")),
-        "FD_value3": format_billions(fd_jul),
-        "FD_value4": f"{((fd_jul / fd_budget) * Decimal('100')):,.0f}" if fd_budget else "0",
+        "FD_value3": format_billions(fd_current),
+        "FD_value4": f"{((fd_current / fd_budget) * Decimal('100')):,.0f}" if fd_budget else "0",
         "FD_value5": _format_magnitude_billions(value("FD YTD Variance")),
         "FD_summary": "Insert FD Summary Here",
         "DP_value1": format_dp_millions(value("DP May-25")),
         "DP_value2": format_dp_millions(value("DP Jun-25")),
-        "DP_value3": format_dp_millions(dp_jul),
-        "DP_value4": f"{((dp_jul / dp_budget) * Decimal('100')):,.0f}" if dp_budget else "0",
+        "DP_value3": format_dp_millions(dp_current),
+        "DP_value4": f"{((dp_current / dp_budget) * Decimal('100')):,.0f}" if dp_budget else "0",
         "DP_value5": _format_magnitude_dp(value("DP YTD Variance")),
         "DP_summary": "Insert DP Summary Here",
         "TRA_value1": format_billions(value("TRA May-25")),
         "TRA_value2": format_billions(value("TRA Jun-25")),
         "TRA_value3": format_billions(value("TRA Jul-25")),
-        "TRA_value4": f"{((tra_ratio * Decimal('100')) if abs(tra_ratio) <= 1 else tra_ratio):,.0f}",
+        "TRA_value4": f"{_ratio_percent(tra_ratio):,.0f}",
         "TRA_value5": _format_magnitude_billions(value("TRA YTD Variance")),
         "TRA_summary": f"The Zone recorded a loan to Deposit Ratio of {format_percentage(tra_ratio)}% in the current period",
         "AB_value1": format_millions(value("AB Jun-25")),
@@ -681,8 +863,14 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, str]:
         "DMT_ACT_value2": f"{value('No. Reactivated DMT_ACT'):,.0f}",
         "DMT_ACT_value3": _format_reactivated_percentage(value("% Reactivated DMT_ACT")),
         **_period_month_context(parsed.detected_period_label),
+        **narrative_context,
         **branch_data,
     }
+    context["ZONAL_HEAD_NAME"] = context["zonal_head_name"]
+    context["PERIOD_MONTH_1"] = context["period_month_1"]
+    context["PERIOD_MONTH_2"] = context["period_month_2"]
+    context["PERIOD_MONTH_3"] = context["period_month_3"]
+
     analysis = build_report_analysis(title, parsed.detected_period_label, context)
     context.update(analysis.to_template_context())
     logger.info("[Report] Template context complete for '%s' (%s values).", zone_name, len(context))

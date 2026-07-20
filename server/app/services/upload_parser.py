@@ -46,6 +46,7 @@ MONTH_NAME_TO_NUMBER = {
 LEGACY_PATTERNS: dict[str, list[str]] = {
     "ZONES": [r"\bzones?\b"],
     "BRANCHES": [r"\bbranches?\b"],
+    "ZONAL HEAD": [r"\bzonal head\b"],
     "PBT 2025 YTD ACHVD": [r"\bpbt\b.*\bytd\b.*\bach"],
     "PBT 2025 FULL YR BGT": [r"\bpbt\b.*\bfull\b.*\b(?:yr|year)\b.*\b(?:bgt|budget)\b", r"\bpbt\b.*\bbudget\b"],
     "PBT 2025 YOY VAR": [r"\bpbt\b.*\byoy\b.*\bvar"],
@@ -617,7 +618,7 @@ def _detected_period_label(columns: list[str]) -> str | None:
 def _normalize_dataframe_values(dataframe: pd.DataFrame) -> pd.DataFrame:
     normalized = dataframe.copy()
     for column in normalized.columns:
-        if column in {"ZONES", "BRANCHES"}:
+        if column in {"ZONES", "BRANCHES", "ZONAL HEAD"}:
             normalized[column] = normalized[column].map(normalize_text)
         else:
             normalized[column] = normalized[column].map(parse_numeric)
