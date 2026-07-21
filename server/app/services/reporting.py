@@ -399,6 +399,16 @@ def _format_reactivated_percentage(value: Decimal | None) -> str:
     return f"{numeric:.0f}"
 
 
+def _format_share_percentage(value: Decimal | None, total: Decimal | None) -> str:
+    if total in (None, Decimal("0")) or value is None or value <= 0:
+        return "0"
+
+    percentage = (value / total) * Decimal("100")
+    if percentage < Decimal("1"):
+        return "less than 1"
+    return f"{percentage:,.0f}"
+
+
 def _signed_value(display_value: str, currency: str) -> str:
     return f"{currency}{display_value}"
 
@@ -415,6 +425,20 @@ def _format_variance_text(value: Decimal | None, formatter: str) -> str:
     else:
         rendered = f"{absolute:,.2f}"
     return rendered
+
+
+def _summary_variance_direction(value: Decimal | None) -> str:
+    numeric = value or Decimal("0")
+    return "negative" if numeric < 0 else "positive"
+
+
+def _summary_variance_display(value: Decimal | None, formatter: str, currency: str) -> str:
+    numeric = value or Decimal("0")
+    plain = _format_variance_text(numeric, formatter)
+    display = f"{currency}{plain}"
+    if numeric < 0:
+        return f"({display})"
+    return display
 
 
 def _trend_rich_text(
@@ -581,15 +605,15 @@ def _negative_branch_entries(
     for branch, value in entries[:limit]:
         if formatter == "billions":
             rendered = format_billions(value)
-            output.append(f"{branch} ({_currency(rendered)})")
+            output.append(f"{branch} branch ({_currency(rendered)})")
         elif formatter == "dp":
             rendered = format_dp_millions(value)
-            output.append(f"{branch} ({_currency(rendered)})")
+            output.append(f"{branch} branch ({_currency(rendered)})")
         elif formatter == "millions":
             rendered = format_millions(value)
-            output.append(f"{branch} ({_currency(rendered)})")
+            output.append(f"{branch} branch ({_currency(rendered)})")
         else:
-            output.append(f"{branch} ({value:,.0f})")
+            output.append(f"{branch} branch ({value:,.0f})")
     return output
 
 
@@ -601,6 +625,20 @@ def _join_readable(items: list[str]) -> str:
     if len(items) == 2:
         return f"{items[0]} and {items[1]}"
     return f"{', '.join(items[:-1])}, and {items[-1]}"
+
+
+def _cards_low_issuance_branches(
+    dataframe: pd.DataFrame,
+    current_column: str,
+    threshold: Decimal = Decimal("100"),
+) -> list[str]:
+    branches: list[str] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        issued = parse_numeric(row.get(current_column)) or Decimal("0")
+        if branch and issued < threshold:
+            branches.append(branch)
+    return branches
 
 
 def _count_negative(dataframe: pd.DataFrame, column: str) -> int:
@@ -669,6 +707,12 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
     sav_top = _branch_budget_achievement(branch_rows, "SAV Jul-25", "SAV 2025 FULL YR BGT")
     fd_top = _branch_budget_achievement(branch_rows, "FD Jul-25", "FD 2025 FULL YR BGT")
     dp_top = _branch_budget_achievement(branch_rows, "DP Jul-25", "DP 2025 FULL YR BGT")
+    cds_previous_issued = parse_numeric(zone_row.get("CDS1 No. of Cards Issued")) or Decimal("0")
+    cds_current_issued = parse_numeric(zone_row.get("CDS2 No. of Cards Issued")) or Decimal("0")
+    cds_growth = Decimal("0")
+    if cds_previous_issued != 0:
+        cds_growth = ((cds_current_issued - cds_previous_issued) / cds_previous_issued) * Decimal("100")
+    cds_low_branches = _cards_low_issuance_branches(branch_rows, "CDS2 No. of Cards Issued")
 
     return {
         "zone_branch_count": str(len(branch_names)),
@@ -699,6 +743,11 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
         "AO_low_branch": ao_low_branch[0] if ao_low_branch else "",
         "AO_low_branch_total": f"{ao_low_branch[1]:,.0f}" if ao_low_branch else "0",
         "AOB_active_branch_count": str(aob_active_branches),
+        "CDS_previous_issued": f"{cds_previous_issued:,.0f}",
+        "CDS_current_issued": f"{cds_current_issued:,.0f}",
+        "CDS_growth_pct": f"{abs(cds_growth):,.0f}",
+        "CDS_low_issuance_branches": _join_readable(cds_low_branches),
+        "CDS_low_issuance_branch_label": "branch" if len(cds_low_branches) == 1 else "branches",
     }
 
 
@@ -723,9 +772,7 @@ def _branch_metrics(zone_name: str, dataframe: pd.DataFrame) -> dict[str, str]:
     def share(row: pd.Series, column: str) -> str:
         total = parse_numeric(zone_data[column].sum())
         value = parse_numeric(row[column])
-        if total in (None, Decimal("0")) or value is None:
-            return "0"
-        return f"{(value / total * Decimal('100')):,.0f}"
+        return _format_share_percentage(value, total)
 
     def variance_value(row: pd.Series, column: str) -> str:
         value = parse_numeric(row[column]) or Decimal("0")
@@ -848,6 +895,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "PBT_value3": f"{((pbt_achieved / pbt_budget) * Decimal('100')):,.0f}" if pbt_budget else "0",
         "PBT_value4": _format_variance_text(value("PBT 2025 YOY VAR"), "billions"),
         "PBT_value4_r": _variance_rich_text(value("PBT 2025 YOY VAR"), "billions", "₦"),
+        "PBT_value4_summary": _summary_variance_display(value("PBT 2025 YOY VAR"), "billions", "₦"),
+        "PBT_value4_summary_direction": _summary_variance_direction(value("PBT 2025 YOY VAR")),
         "PBT_value5": _signed_value(format_billions(value("PBT Exp Run Rate")), "₦"),
         "PBT_value6": _format_ratio_percentage(value("PBT Cost to Income Ratio")),
         "PBT_summary": "Insert PBT Summary Here",
@@ -859,6 +908,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "DDA_value4": f"{((dda_current / dda_budget) * Decimal('100')):,.0f}" if dda_budget else "0",
         "DDA_value5": _format_variance_text(value("DDA YTD Variance"), "billions"),
         "DDA_value5_r": _variance_rich_text(value("DDA YTD Variance"), "billions", "₦"),
+        "DDA_value5_summary": _summary_variance_display(value("DDA YTD Variance"), "billions", "₦"),
+        "DDA_value5_summary_direction": _summary_variance_direction(value("DDA YTD Variance")),
         "DDA_summary": "Insert DDA Summary Here",
         "SAV_value1": _signed_value(format_billions(value("SAV May-25")), "₦"),
         "SAV_value2": _signed_value(format_billions(value("SAV Jun-25")), "₦"),
@@ -868,6 +919,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "SAV_value4": f"{((sav_current / sav_budget) * Decimal('100')):,.0f}" if sav_budget else "0",
         "SAV_value5": _format_variance_text(value("SAV YTD Variance"), "billions"),
         "SAV_value5_r": _variance_rich_text(value("SAV YTD Variance"), "billions", "₦"),
+        "SAV_value5_summary": _summary_variance_display(value("SAV YTD Variance"), "billions", "₦"),
+        "SAV_value5_summary_direction": _summary_variance_direction(value("SAV YTD Variance")),
         "SAV_summary": "Insert SAV Summary Here",
         "FD_value1": _signed_value(format_billions(value("FD May-25")), "₦"),
         "FD_value2": _signed_value(format_billions(value("FD Jun-25")), "₦"),
@@ -877,6 +930,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "FD_value4": f"{((fd_current / fd_budget) * Decimal('100')):,.0f}" if fd_budget else "0",
         "FD_value5": _format_variance_text(value("FD YTD Variance"), "billions"),
         "FD_value5_r": _variance_rich_text(value("FD YTD Variance"), "billions", "₦"),
+        "FD_value5_summary": _summary_variance_display(value("FD YTD Variance"), "billions", "₦"),
+        "FD_value5_summary_direction": _summary_variance_direction(value("FD YTD Variance")),
         "FD_summary": "Insert FD Summary Here",
         "DP_value1": _signed_value(format_dp_millions(value("DP May-25")), "$"),
         "DP_value2": _signed_value(format_dp_millions(value("DP Jun-25")), "$"),
@@ -886,6 +941,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "DP_value4": f"{((dp_current / dp_budget) * Decimal('100')):,.0f}" if dp_budget else "0",
         "DP_value5": _format_variance_text(value("DP YTD Variance"), "dp"),
         "DP_value5_r": _variance_rich_text(value("DP YTD Variance"), "dp", "$"),
+        "DP_value5_summary": _summary_variance_display(value("DP YTD Variance"), "dp", "$"),
+        "DP_value5_summary_direction": _summary_variance_direction(value("DP YTD Variance")),
         "DP_summary": "Insert DP Summary Here",
         "TRA_value1": _signed_value(format_billions(value("TRA May-25")), "₦"),
         "TRA_value2": _signed_value(format_billions(value("TRA Jun-25")), "₦"),
@@ -895,12 +952,16 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "TRA_value4": f"{_ratio_percent(tra_ratio):,.0f}",
         "TRA_value5": _format_variance_text(value("TRA YTD Variance"), "billions"),
         "TRA_value5_r": _variance_rich_text(value("TRA YTD Variance"), "billions", "₦"),
+        "TRA_value5_summary": _summary_variance_display(value("TRA YTD Variance"), "billions", "₦"),
+        "TRA_value5_summary_direction": _summary_variance_direction(value("TRA YTD Variance")),
         "TRA_summary": f"The Zone recorded a loan to Deposit Ratio of {format_percentage(tra_ratio)}% in the current period",
         "AB_value1": _signed_value(format_millions(value("AB Jun-25")), "₦"),
         "AB_value2": _signed_value(format_millions(value("AB Jul-25")), "₦"),
         "AB_value2_r": _trend_rich_text(format_millions(value("AB Jul-25")), value("AB Jun-25"), value("AB Jul-25"), "₦"),
         "AB_value3": _format_variance_text(value("AB VAR"), "millions"),
         "AB_value3_r": _variance_rich_text(value("AB VAR"), "millions", "₦"),
+        "AB_value3_summary": _summary_variance_display(value("AB VAR"), "millions", "₦"),
+        "AB_value3_summary_direction": _summary_variance_direction(value("AB VAR")),
         "AB_summary": "Insert AB Summary Here",
         "AO_value1": f"{value('AO C/A Opened - Funded'):,.0f}",
         "AO_value2": f"{value('AO S/A Opened - Funded'):,.0f}",
@@ -932,6 +993,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "NXP_value3_r": _trend_rich_text(_format_zero_safe_millions(value("NXP Jul-25")), value("NXP Jun-25"), value("NXP Jul-25"), "$"),
         "NXP_value4": _format_variance_text(value("NXP YOY VAR"), "millions"),
         "NXP_value4_r": _variance_rich_text(value("NXP YOY VAR"), "millions", "$"),
+        "NXP_value4_summary": _summary_variance_display(value("NXP YOY VAR"), "millions", "$"),
+        "NXP_value4_summary_direction": _summary_variance_direction(value("NXP YOY VAR")),
         "DMT_ACT_value1": f"{value('TOTAL_DMT_ACT'):,.0f}",
         "DMT_ACT_value2": f"{value('No. Reactivated DMT_ACT'):,.0f}",
         "DMT_ACT_value3": _format_reactivated_percentage(value("% Reactivated DMT_ACT")),

@@ -11,48 +11,60 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
         "PBT_value2": "43.17B",
         "PBT_value3": "42",
         "PBT_value4": "3.70B",
+        "PBT_value4_summary": "(₦3.70B)",
+        "PBT_value4_summary_direction": "negative",
         "PBT_value5": "12.35B",
         "PBT_value6": "143",
-        "PBT_negative_yoy_branches": "Apapa (₦8.17B) and Creek Road (₦158.27B)",
+        "PBT_negative_yoy_branches": "Apapa branch (₦8.17B) and Creek Road branch (₦158.27B)",
         "PBT_negative_mom_branch_count": "5",
-        "PBT_negative_mom_branches": "Apapa (₦1.20B), Creek Road (₦900M), and Trinity 2 (₦300M)",
+        "PBT_negative_mom_branches": "Apapa branch (₦1.20B), Creek Road branch (₦900M), and Trinity 2 branch (₦300M)",
         "DDA_value1": "64.13B",
         "DDA_value2": "67.90B",
         "DDA_value3": "72.10B",
         "DDA_value4": "40",
         "DDA_value5": "21.30B",
+        "DDA_value5_summary": "₦21.30B",
+        "DDA_value5_summary_direction": "positive",
         "DDA_top_budget_branch": "Creek Road",
         "DDA_top_budget_pct": "31",
-        "DDA_negative_ytd_branches": "Creek Road (₦22.9B)",
+        "DDA_negative_ytd_branches": "Creek Road branch (₦22.9B)",
         "SAV_value1": "24.31B",
         "SAV_value2": "25.10B",
         "SAV_value3": "26.00B",
         "SAV_value4": "44",
         "SAV_value5": "1.36B",
+        "SAV_value5_summary": "₦1.36B",
+        "SAV_value5_summary_direction": "positive",
         "SAV_top_budget_branch": "Trinity 2",
         "SAV_top_budget_pct": "36",
-        "SAV_negative_ytd_branches": "Mobil Road (₦90B)",
+        "SAV_negative_ytd_branches": "Mobil Road branch (₦90B)",
         "FD_value1": "5.38B",
         "FD_value2": "5.20B",
         "FD_value3": "4.90B",
         "FD_value4": "35",
         "FD_value5": "2.97B",
+        "FD_value5_summary": "₦2.97B",
+        "FD_value5_summary_direction": "positive",
         "FD_top_budget_branch": "Warehouse Rd 2",
         "FD_top_budget_pct": "41",
-        "FD_negative_mom_branches": "Apapa (₦22.6B)",
+        "FD_negative_mom_branches": "Apapa branch (₦22.6B)",
         "DP_value1": "59.49M",
         "DP_value2": "56.36M",
         "DP_value3": "60.43M",
         "DP_value4": "16",
         "DP_value5": "38.31M",
+        "DP_value5_summary": "$38.31M",
+        "DP_value5_summary_direction": "positive",
         "DP_top_budget_branch": "Creek Road",
         "DP_top_budget_pct": "19",
-        "DP_negative_ytd_branches": "Marine Road ($733K)",
+        "DP_negative_ytd_branches": "Marine Road branch ($733K)",
         "TRA_value1": "5.67B",
         "TRA_value2": "5.80B",
         "TRA_value3": "6.00B",
         "TRA_value4": "103",
         "TRA_value5": "523.68M",
+        "TRA_value5_summary": "₦523.68M",
+        "TRA_value5_summary_direction": "positive",
         "TRA_high_ldr_branch": "Trinity 1",
         "TRA_high_ldr_value": "150",
         "TRA_low_ldr_branch": "Mobil Road",
@@ -60,7 +72,9 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
         "AB_value1": "58.53M",
         "AB_value2": "72.69M",
         "AB_value3": "14.16M",
-        "AB_negative_variance_branches": "Apapa (₦14.16M)",
+        "AB_value3_summary": "(₦14.16M)",
+        "AB_value3_summary_direction": "negative",
+        "AB_negative_variance_branches": "Apapa branch (₦14.16M)",
         "AO_total_accounts": "745",
         "AO_value5": "145",
         "AO_value6": "600",
@@ -70,6 +84,11 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
         "CDS_value1": "1,261",
         "CDS_value2": "61",
         "CDS_value3": "1,322",
+        "CDS_previous_issued": "1,061",
+        "CDS_current_issued": "1,322",
+        "CDS_growth_pct": "25",
+        "CDS_low_issuance_branches": "Creek road and Warehouse 2",
+        "CDS_low_issuance_branch_label": "branches",
         "CE_value2": "1,105",
         "CE_value3": "1,153",
         "AOB_active_branch_count": "4",
@@ -85,17 +104,25 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
         "NXP_value2": "0.00",
         "NXP_value3": "14.16M",
         "NXP_value4": "3.20M",
+        "NXP_value4_summary": "$3.20M",
+        "NXP_value4_summary_direction": "positive",
     }
 
     template_context = build_report_analysis("APAPA", "Apr-26 to Jun-26", context).to_template_context()
 
-    assert template_context["PBT_summary_1"].startswith("APAPA closed the review with PBT")
-    assert "Apapa (₦8.17B)" in template_context["PBT_summary_2"]
-    assert "Negative MOM variance came from Apapa (₦1.20B), Creek Road (₦900M), and Trinity 2 (₦300M)." in template_context["PBT_summary_3"]
+    assert template_context["PBT_summary_1"].startswith("APAPA closed the period under review with PBT")
+    assert "YOY negative variance of (₦3.70B)." in template_context["PBT_summary_2"]
+    assert "Apapa branch (₦8.17B)" in template_context["PBT_summary_2"]
+    assert "Negative MOM variance came from Apapa branch (₦1.20B), Creek Road branch (₦900M), and Trinity 2 branch (₦300M)." in template_context["PBT_summary_3"]
     assert "$60.43M" in template_context["DP_summary_2"]
-    assert "$14.16M" in template_context["NXP_summary_1"]
-    assert "Negative branch pressure came from Apapa (₦14.16M)." in template_context["AB_summary_1"]
+    assert "$3.20M as a positive variance." in template_context["NXP_summary_1"]
+    assert "negative variance of (₦14.16M)." in template_context["AB_summary_1"]
+    assert "Negative variance pressure came from Apapa branch (₦14.16M)." in template_context["AB_summary_1"]
     assert template_context["AO_summary_1"].startswith("The zone opened 745 accounts")
+    assert template_context["CDS_summary_1"] == (
+        "The zone issued 1,322 cards in December, a 25% growth from 1,061 cards issued in November 2026. "
+        "1,261 cards are active. 61 cards are inactive. Creek road and Warehouse 2 branches issued less than 100 cards in December."
+    )
     assert template_context["FINAL_summary_3"].endswith("stronger note.")
     assert "ROBERT ORAGBON" in template_context["FINAL_summary_3"]
 
@@ -110,6 +137,8 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "PBT_value2": "2.00B",
         "PBT_value3": "50",
         "PBT_value4": "0.50B",
+        "PBT_value4_summary": "₦0.50B",
+        "PBT_value4_summary_direction": "positive",
         "PBT_value5": "1.20B",
         "PBT_value6": "80",
         "PBT_negative_yoy_branches": "",
@@ -120,6 +149,8 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "DDA_value3": "9.00B",
         "DDA_value4": "20",
         "DDA_value5": "1.00B",
+        "DDA_value5_summary": "(₦1.00B)",
+        "DDA_value5_summary_direction": "negative",
         "DDA_top_budget_branch": "",
         "DDA_top_budget_pct": "0",
         "DDA_negative_ytd_branches": "",
@@ -128,6 +159,8 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "SAV_value3": "12.00B",
         "SAV_value4": "25",
         "SAV_value5": "2.00B",
+        "SAV_value5_summary": "₦2.00B",
+        "SAV_value5_summary_direction": "positive",
         "SAV_top_budget_branch": "",
         "SAV_top_budget_pct": "0",
         "SAV_negative_ytd_branches": "",
@@ -136,6 +169,8 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "FD_value3": "4.00B",
         "FD_value4": "10",
         "FD_value5": "2.00B",
+        "FD_value5_summary": "(₦2.00B)",
+        "FD_value5_summary_direction": "negative",
         "FD_top_budget_branch": "",
         "FD_top_budget_pct": "0",
         "FD_negative_mom_branches": "",
@@ -144,6 +179,8 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "DP_value3": "3.00M",
         "DP_value4": "8",
         "DP_value5": "0.50M",
+        "DP_value5_summary": "$0.50M",
+        "DP_value5_summary_direction": "positive",
         "DP_top_budget_branch": "",
         "DP_top_budget_pct": "0",
         "DP_negative_ytd_branches": "",
@@ -152,6 +189,8 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "TRA_value3": "3.00B",
         "TRA_value4": "75",
         "TRA_value5": "0.50B",
+        "TRA_value5_summary": "(₦0.50B)",
+        "TRA_value5_summary_direction": "negative",
         "TRA_high_ldr_branch": "High Branch",
         "TRA_high_ldr_value": "140",
         "TRA_low_ldr_branch": "Low Branch",
@@ -159,6 +198,8 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "AB_value1": "72.69M",
         "AB_value2": "58.53M",
         "AB_value3": "14.16M",
+        "AB_value3_summary": "(₦14.16M)",
+        "AB_value3_summary_direction": "negative",
         "AB_negative_variance_branches": "",
         "AO_total_accounts": "10",
         "AO_value5": "5",
@@ -169,6 +210,11 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "CDS_value1": "100",
         "CDS_value2": "10",
         "CDS_value3": "110",
+        "CDS_previous_issued": "100",
+        "CDS_current_issued": "110",
+        "CDS_growth_pct": "10",
+        "CDS_low_issuance_branches": "",
+        "CDS_low_issuance_branch_label": "branches",
         "CE_value2": "100",
         "CE_value3": "90",
         "AOB_active_branch_count": "1",
@@ -184,11 +230,13 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "NXP_value2": "5.00M",
         "NXP_value3": "4.00M",
         "NXP_value4": "1.00M",
+        "NXP_value4_summary": "$1.00M",
+        "NXP_value4_summary_direction": "positive",
     }
 
     template_context = build_report_analysis("TEST ZONE", "Apr-26 to Jun-26", context).to_template_context()
 
-    assert "negative mom variance" in template_context["AB_summary_1"].lower()
+    assert "negative variance" in template_context["AB_summary_1"].lower()
     assert "positive mom variance" in template_context["SAV_summary_3"].lower()
     assert "negative mom variance" in template_context["CE_summary_1"].lower()
     assert "No branch recorded a negative MOM variance in the current month." in template_context["PBT_summary_3"]

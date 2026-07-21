@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from app.services.reporting import (
     _additional_narrative_context,
+    _format_share_percentage,
     _branch_subset,
     _format_magnitude_billions,
     _format_magnitude_dp,
@@ -65,6 +66,12 @@ def test_format_magnitude_dp_uses_absolute_value() -> None:
 def test_format_reactivated_percentage_handles_fraction_and_over_one_ratio() -> None:
     assert _format_reactivated_percentage(Decimal("0.07974896776892915")) == "8"
     assert _format_reactivated_percentage(Decimal("1.483652843719201")) == "148"
+
+
+def test_format_share_percentage_tightens_small_positive_contributions() -> None:
+    assert _format_share_percentage(Decimal("0.23"), Decimal("100")) == "less than 1"
+    assert _format_share_percentage(Decimal("0"), Decimal("100")) == "0"
+    assert _format_share_percentage(Decimal("5"), Decimal("100")) == "5"
 
 
 def test_variance_label_marks_positive_and_negative_values() -> None:

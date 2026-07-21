@@ -1432,3 +1432,69 @@ This document was produced by following these inspection steps:
   - direct parse of `JUNE'26 ZONAL DISTRIBUTION FOR BRANCHES.xlsx` now returns:
     - `Apr-26 to Jun-26`
   - `..\.venv\Scripts\python.exe -m pytest tests/test_upload_parser.py tests/test_reporting.py tests/test_analysis_narratives.py` -> `21 passed`
+
+
+## 2026-07-21 Contribution Percentage Tightening Pass
+- Tightened branch contribution wording so very small positive shares no longer read like `0%` or noisy fractional percentages.
+- Updated `server/app/services/reporting.py`:
+  - added `_format_share_percentage()`
+  - true zero contribution still renders as `0`
+  - any positive contribution below `1%` now renders as `less than 1`
+  - all existing branch share fields now flow through that shared formatter
+- This keeps the existing template wording natural, so places that already append `%` will now read as:
+  - `less than 1%`
+- Added regression coverage in `server/tests/test_reporting.py` for:
+  - tiny positive share -> `less than 1`
+  - zero share -> `0`
+  - ordinary share -> rounded whole percentage text
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py tests/test_upload_parser.py` -> `22 passed`
+
+
+## 2026-07-21 Summary Variance Language And Structure Upload Review Pass
+- Tightened summary variance language across the report engine so headline variance sentences now explicitly state whether the variance is positive or negative.
+- Updated `server/app/services/reporting.py` with summary-only variance helpers:
+  - `_summary_variance_direction()`
+  - `_summary_variance_display()`
+- Summary behavior now differs intentionally from the table behavior:
+  - tables keep red/green sign signaling without parentheses
+  - summaries render negative variance values in plain black text with parentheses, for example `(₦268.36M)`
+- Updated `server/app/analysis/narratives.py` so summary wording now reads more directly, for example:
+  - `closed the period under review`
+  - `YOY negative variance of (...)`
+  - `negative variance pressure came from ...`
+- Tightened branch naming in negative-variance lists so entries now render with the `branch` suffix, for example:
+  - `Benin branch (₦1.21B)`
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py tests/test_upload_parser.py` -> `22 passed`
+  - `npm run build` in `client/` -> passed
+
+
+## 2026-07-21 Structure Builder Upload Review Revert
+- Reverted the temporary structure-builder UI change that added an edit/review step to the direct structure upload flow.
+- Restored the prior behavior in `client/src/pages/StructureBuilderPage.tsx`:
+  - direct structure uploads once again replace the active structure file immediately
+  - the existing report-based structure preview/editor flow remains unchanged
+- The summary-variance tightening work from the same pass remains intact.
+- Verification:
+  - `npm run build` in `client/` -> passed
+
+
+## 2026-07-21 Cards Narrative Tightening Pass
+- Updated the cards narrative in `server/app/analysis/narratives.py` to follow the new exact sentence pattern requested by the user:
+  - current-month cards issued
+  - percentage growth from the previous period
+  - previous-month cards issued with year
+  - active cards count
+  - inactive cards count
+  - explicit low-issuance branch callout for branches that issued fewer than 100 cards in the current period
+- Added cards-specific narrative context in `server/app/services/reporting.py`:
+  - `CDS_previous_issued`
+  - `CDS_current_issued`
+  - `CDS_growth_pct`
+  - `CDS_low_issuance_branches`
+  - `CDS_low_issuance_branch_label`
+- Current-period low-issuance branches are derived from branch rows using `CDS2 No. of Cards Issued`, which the current manual structure workflow treats as the latest card-issuance month.
+- Confirmed current structure-builder behavior remains:
+  - direct uploaded structure files are not editable after upload
+  - editable review is still available only in the `Build From Current Report` preview/editor flow
