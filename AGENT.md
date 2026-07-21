@@ -1498,3 +1498,42 @@ This document was produced by following these inspection steps:
 - Confirmed current structure-builder behavior remains:
   - direct uploaded structure files are not editable after upload
   - editable review is still available only in the `Build From Current Report` preview/editor flow
+
+
+## 2026-07-21 Direct Structure Review Revert
+- Reverted the temporary direct-upload review pass for prepared structure files.
+- Restored the prior behavior:
+  - `Upload Prepared Structure File` now replaces the active structure immediately again
+  - no separate editable review step runs for direct structure uploads
+- `Build From Current Report` remains the only editable structure-review flow.
+
+
+## 2026-07-21 NXP Zero-Case Narrative Tightening
+- Tightened the NXP narrative in `server/app/analysis/narratives.py` for fully flat zero cases.
+- New behavior:
+  - when previous-month NXP, current-month NXP, and YOY variance are all zero, the report no longer says:
+    - `NXP closed at $0.00 in June, from $0.00 in May, while the year-on-year variance closed at $0K.`
+  - it now reads more naturally:
+    - `NXP remained flat at $0.00 in June and May, with no year-on-year variance recorded.`
+- Added regression coverage in `server/tests/test_analysis_narratives.py`.
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py` -> `3 passed`
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py` -> `14 passed`
+
+
+## 2026-07-21 Broader Zero-Case Narrative Tightening
+- Extended the flat-zero narrative tightening in `server/app/analysis/narratives.py` beyond NXP.
+- Added clearer zero-activity wording for:
+  - Domiciliary Deposits
+  - Agency Banking
+  - Channels Enrolled
+  - Agents Onboarded
+  - Dormant Account Reactivation
+  - POS
+- Example behavior:
+  - flat zero monetary lines now say `remained flat ... with no ... variance recorded`
+  - zero operational activity lines now say `No ... activity was recorded`
+- Added regression coverage in `server/tests/test_analysis_narratives.py` for all of the above zero-case summaries.
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py` -> `3 passed`
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py` -> `14 passed`

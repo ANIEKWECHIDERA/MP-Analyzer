@@ -150,6 +150,15 @@ def _join_sentences(*sentences: str) -> str:
     return " ".join(sentence.strip() for sentence in sentences if sentence.strip())
 
 
+def _is_zero_value(value: str) -> bool:
+    numeric = _display_number(value)
+    return numeric is not None and numeric == 0
+
+
+def _all_zero_values(*values: str) -> bool:
+    return all(_is_zero_value(value) for value in values)
+
+
 def build_report_analysis(zone_title: str, period_label: str | None, context: dict[str, object]) -> ReportAnalysis:
     report_month = _title_month(_value(context, "report_month", ""))
     previous_month = _title_month(_value(context, "period_month_previous", ""))
@@ -241,6 +250,11 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
         ),
     ]
 
+    dp_zero_case = _all_zero_values(
+        _value(context, "DP_value2"),
+        _value(context, "DP_value3"),
+        _value(context, "DP_value5_summary"),
+    )
     dp_summary = [
         _budget_lead_sentence(
             context,
@@ -250,12 +264,16 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
             "None of the branches in the zone has achieved up to 18% of their targets in this parameter.",
         ),
         (
-            f"Domiciliary Deposits closed at {_dollar(_value(context, 'DP_value3'))} in {report_month}, from {_dollar(_value(context, 'DP_value2'))} in {previous_month}. "
-            f"The zone achieved {_value(context, 'DP_value4')}% of budget and recorded a {_variance_direction(context, 'DP_value5_summary_direction')} YTD variance of {_value(context, 'DP_value5_summary')}. "
-            + (
-                f"Negative variance pressure came from {_value(context, 'DP_negative_ytd_branches')}."
-                if _value(context, "DP_negative_ytd_branches", "")
-                else "No branch recorded a negative YTD variance."
+            f"Domiciliary Deposits remained flat at {_dollar(_value(context, 'DP_value3'))} in {report_month} and {previous_month}, with no YTD variance recorded."
+            if dp_zero_case
+            else (
+                f"Domiciliary Deposits closed at {_dollar(_value(context, 'DP_value3'))} in {report_month}, from {_dollar(_value(context, 'DP_value2'))} in {previous_month}. "
+                f"The zone achieved {_value(context, 'DP_value4')}% of budget and recorded a {_variance_direction(context, 'DP_value5_summary_direction')} YTD variance of {_value(context, 'DP_value5_summary')}. "
+                + (
+                    f"Negative variance pressure came from {_value(context, 'DP_negative_ytd_branches')}."
+                    if _value(context, "DP_negative_ytd_branches", "")
+                    else "No branch recorded a negative YTD variance."
+                )
             )
         ),
     ]
@@ -274,14 +292,23 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
         ),
     ]
 
+    ab_zero_case = _all_zero_values(
+        _value(context, "AB_value1"),
+        _value(context, "AB_value2"),
+        _value(context, "AB_value3_summary"),
+    )
     ab_summary = [
         (
-            f"Agency Banking closed at {_naira(_value(context, 'AB_value2'))} in {report_month}, compared with {_naira(_value(context, 'AB_value1'))} in {previous_month}, "
-            f"translating to a {_variance_direction(context, 'AB_value3_summary_direction')} variance of {_value(context, 'AB_value3_summary')}. "
-            + (
-                f"Negative variance pressure came from {_value(context, 'AB_negative_variance_branches')}."
-                if _value(context, "AB_negative_variance_branches", "")
-                else "No branch recorded a negative variance."
+            f"Agency Banking remained flat at {_naira(_value(context, 'AB_value2'))} in {report_month} and {previous_month}, with no variance recorded."
+            if ab_zero_case
+            else (
+                f"Agency Banking closed at {_naira(_value(context, 'AB_value2'))} in {report_month}, compared with {_naira(_value(context, 'AB_value1'))} in {previous_month}, "
+                f"translating to a {_variance_direction(context, 'AB_value3_summary_direction')} variance of {_value(context, 'AB_value3_summary')}. "
+                + (
+                    f"Negative variance pressure came from {_value(context, 'AB_negative_variance_branches')}."
+                    if _value(context, "AB_negative_variance_branches", "")
+                    else "No branch recorded a negative variance."
+                )
             )
         ),
     ]
@@ -303,30 +330,57 @@ def build_report_analysis(zone_title: str, period_label: str | None, context: di
             f"{cds_summary} {cds_low_branches} {_value(context, 'CDS_low_issuance_branch_label', 'branches')} issued less than 100 cards in {report_month}."
         )
 
-    ce_summary = (
-        f"The zone's channels enrolled closed at {_value(context, 'CE_value3')} in {report_month}, from {_value(context, 'CE_value2')} in {previous_month}, representing a "
-        f"{_variance_label_from_change(_value(context, 'CE_value2'), _value(context, 'CE_value3')).lower()}."
-    )
+    if _all_zero_values(_value(context, "CE_value2"), _value(context, "CE_value3")):
+        ce_summary = f"No channel enrolments were recorded in {report_month} or {previous_month}."
+    else:
+        ce_summary = (
+            f"The zone's channels enrolled closed at {_value(context, 'CE_value3')} in {report_month}, from {_value(context, 'CE_value2')} in {previous_month}, representing a "
+            f"{_variance_label_from_change(_value(context, 'CE_value2'), _value(context, 'CE_value3')).lower()}."
+        )
 
-    aob_summary = (
-        f"{_value(context, 'AOB_active_branch_count')} of the {_value(context, 'zone_branch_count')} branches in the zone onboarded agents in {report_month}, with the zone closing at "
-        f"{_value(context, 'AOB_value3')} against {_value(context, 'AOB_value2')} in {previous_month}."
-    )
+    if _all_zero_values(_value(context, "AOB_value2"), _value(context, "AOB_value3")):
+        aob_summary = f"No branches onboarded agents in {report_month}, and the zone also recorded zero in {previous_month}."
+    else:
+        aob_summary = (
+            f"{_value(context, 'AOB_active_branch_count')} of the {_value(context, 'zone_branch_count')} branches in the zone onboarded agents in {report_month}, with the zone closing at "
+            f"{_value(context, 'AOB_value3')} against {_value(context, 'AOB_value2')} in {previous_month}."
+        )
 
-    dmt_summary = (
-        f"With {_value(context, 'DMT_ACT_value1')} dormant accounts recorded in {report_month}, the zone reactivated {_value(context, 'DMT_ACT_value2')} accounts, representing "
-        f"{_value(context, 'DMT_ACT_value3')}% reactivation."
-    )
+    if _all_zero_values(_value(context, "DMT_ACT_value1"), _value(context, "DMT_ACT_value2"), _value(context, "DMT_ACT_value3")):
+        dmt_summary = f"No dormant-account reactivation activity was recorded in {report_month}."
+    else:
+        dmt_summary = (
+            f"With {_value(context, 'DMT_ACT_value1')} dormant accounts recorded in {report_month}, the zone reactivated {_value(context, 'DMT_ACT_value2')} accounts, representing "
+            f"{_value(context, 'DMT_ACT_value3')}% reactivation."
+        )
 
-    pos_summary = (
-        f"The zone recorded {_value(context, 'POS_value1')} active terminals, {_value(context, 'POS_value2')} inactive terminals, {_value(context, 'POS_value3')} newly deployed terminals, "
-        f"and {_value(context, 'POS_value4')} retrieved terminals."
-    )
+    if _all_zero_values(
+        _value(context, "POS_value1"),
+        _value(context, "POS_value2"),
+        _value(context, "POS_value3"),
+        _value(context, "POS_value4"),
+    ):
+        pos_summary = f"No POS activity was recorded in {report_month}."
+    else:
+        pos_summary = (
+            f"The zone recorded {_value(context, 'POS_value1')} active terminals, {_value(context, 'POS_value2')} inactive terminals, {_value(context, 'POS_value3')} newly deployed terminals, "
+            f"and {_value(context, 'POS_value4')} retrieved terminals."
+        )
 
-    nxp_summary = (
-        f"NXP closed at {_dollar(_value(context, 'NXP_value3'))} in {report_month}, from {_dollar(_value(context, 'NXP_value2'))} in {previous_month}, while the year-on-year variance closed at "
-        f"{_value(context, 'NXP_value4_summary')} as a {_variance_direction(context, 'NXP_value4_summary_direction')} variance."
-    )
+    if (
+        _is_zero_value(_value(context, "NXP_value2"))
+        and _is_zero_value(_value(context, "NXP_value3"))
+        and _is_zero_value(_value(context, "NXP_value4_summary"))
+    ):
+        nxp_summary = (
+            f"NXP remained flat at {_dollar(_value(context, 'NXP_value3'))} in {report_month} and {previous_month}, "
+            "with no year-on-year variance recorded."
+        )
+    else:
+        nxp_summary = (
+            f"NXP closed at {_dollar(_value(context, 'NXP_value3'))} in {report_month}, from {_dollar(_value(context, 'NXP_value2'))} in {previous_month}, while the year-on-year variance closed at "
+            f"{_value(context, 'NXP_value4_summary')} as a {_variance_direction(context, 'NXP_value4_summary_direction')} variance."
+        )
 
     final_summary = [
         (
