@@ -58,6 +58,8 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
         "DP_top_budget_branch": "Creek Road",
         "DP_top_budget_pct": "19",
         "DP_negative_ytd_branches": "Marine Road branch ($733K)",
+        "DP_positive_mom_branches": "Creek Road and Marine Road",
+        "DP_positive_mom_branch_label": "branches",
         "TRA_value1": "5.67B",
         "TRA_value2": "5.80B",
         "TRA_value3": "6.00B",
@@ -69,12 +71,16 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
         "TRA_high_ldr_value": "150",
         "TRA_low_ldr_branch": "Mobil Road",
         "TRA_low_ldr_value": "13",
+        "TRA_overutilized_branches": "Trinity 1 branch",
+        "TRA_low_ldr_branches": "Mobil Road branch at 13% and Marine Road branch at 19%",
         "AB_value1": "58.53M",
         "AB_value2": "72.69M",
         "AB_value3": "14.16M",
         "AB_value3_summary": "(₦14.16M)",
         "AB_value3_summary_direction": "negative",
         "AB_negative_variance_branches": "Apapa branch (₦14.16M)",
+        "AB_decline_branches": "Apapa, Creek Road and Mobil Road",
+        "AB_decline_branch_label": "branches",
         "AO_total_accounts": "745",
         "AO_value5": "145",
         "AO_value6": "600",
@@ -97,6 +103,7 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
         "DMT_ACT_value1": "11,068",
         "DMT_ACT_value2": "233",
         "DMT_ACT_value3": "2",
+        "DMT_reactivation_label": "only reactivated",
         "POS_value1": "200",
         "POS_value2": "271",
         "POS_value3": "3",
@@ -106,6 +113,10 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
         "NXP_value4": "3.20M",
         "NXP_value4_summary": "$3.20M",
         "NXP_value4_summary_direction": "positive",
+        "NXP_positive_mom_branches": "Creek Road and Warehouse Rd 2",
+        "NXP_positive_mom_branch_label": "branches",
+        "NXP_top_growth_branch": "Warehouse Rd 2",
+        "NXP_top_growth_pct": "850",
     }
 
     template_context = build_report_analysis("APAPA", "Apr-26 to Jun-26", context).to_template_context()
@@ -114,11 +125,28 @@ def test_build_report_analysis_emits_june_template_placeholders() -> None:
     assert "YOY negative variance of (₦3.70B)." in template_context["PBT_summary_2"]
     assert "Apapa branch (₦8.17B)" in template_context["PBT_summary_2"]
     assert "Negative MOM variance came from Apapa branch (₦1.20B), Creek Road branch (₦900M), and Trinity 2 branch (₦300M)." in template_context["PBT_summary_3"]
-    assert "$60.43M" in template_context["DP_summary_2"]
-    assert "$3.20M as a positive variance." in template_context["NXP_summary_1"]
-    assert "negative variance of (₦14.16M)." in template_context["AB_summary_1"]
-    assert "Negative variance pressure came from Apapa branch (₦14.16M)." in template_context["AB_summary_1"]
+    assert "The zone recorded a positive YTD variance of $38.31M, despite the negative performance of Marine Road branch ($733K)." in template_context["DP_summary_2"]
+    assert "Also, the zone recorded a positive MOM variance in this parameter, with Creek Road and Marine Road branches driving the improvement." in template_context["DP_summary_2"]
+    assert template_context["NXP_summary_1"] == (
+        "Creek Road and Warehouse Rd 2 branches are commended for recording a positive MOM variance in this parameter, "
+        "especially Warehouse Rd 2 branch that recorded a growth of over 850% in this parameter."
+    )
+    assert template_context["AB_summary_1"] == (
+        "Apapa, Creek Road and Mobil Road branches recorded a decline in agency banking transaction value in December."
+    )
+    assert template_context["TRA_summary_1"] == (
+        "Trinity 1 branch have an LDR exceeding 150% which shows that they are overutilizing their deposits and borrowing from other branches and zones."
+    )
+    assert template_context["TRA_summary_2"] == (
+        "Mobil Road branch at 13% and Marine Road branch at 19% and they are encouraged to improve on this."
+    )
     assert template_context["AO_summary_1"].startswith("The zone opened 745 accounts")
+    assert template_context["POS_summary_1"] == (
+        "POS: The zone recorded a total of 200 active terminals, 271 inactive terminals, and 3 newly deployed terminals."
+    )
+    assert template_context["DMT_ACT_summary_1"] == (
+        "With 11,068 dormant accounts recorded in December, the zone only reactivated 233 accounts, and they are admonished to do better."
+    )
     assert template_context["CDS_summary_1"] == (
         "The zone issued 1,322 cards in December, a 25% growth from 1,061 cards issued in November 2026. "
         "1,261 cards are active. 61 cards are inactive. Creek road and Warehouse 2 branches issued less than 100 cards in December."
@@ -184,6 +212,8 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "DP_top_budget_branch": "",
         "DP_top_budget_pct": "0",
         "DP_negative_ytd_branches": "",
+        "DP_positive_mom_branches": "",
+        "DP_positive_mom_branch_label": "branches",
         "TRA_value1": "1.00B",
         "TRA_value2": "2.00B",
         "TRA_value3": "3.00B",
@@ -195,12 +225,16 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "TRA_high_ldr_value": "140",
         "TRA_low_ldr_branch": "Low Branch",
         "TRA_low_ldr_value": "18",
+        "TRA_overutilized_branches": "",
+        "TRA_low_ldr_branches": "",
         "AB_value1": "72.69M",
         "AB_value2": "58.53M",
         "AB_value3": "14.16M",
         "AB_value3_summary": "(₦14.16M)",
         "AB_value3_summary_direction": "negative",
         "AB_negative_variance_branches": "",
+        "AB_decline_branches": "",
+        "AB_decline_branch_label": "branches",
         "AO_total_accounts": "10",
         "AO_value5": "5",
         "AO_value6": "5",
@@ -223,6 +257,7 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "DMT_ACT_value1": "100",
         "DMT_ACT_value2": "5",
         "DMT_ACT_value3": "5",
+        "DMT_reactivation_label": "only reactivated",
         "POS_value1": "10",
         "POS_value2": "2",
         "POS_value3": "1",
@@ -232,6 +267,10 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
         "NXP_value4": "1.00M",
         "NXP_value4_summary": "$1.00M",
         "NXP_value4_summary_direction": "positive",
+        "NXP_positive_mom_branches": "",
+        "NXP_positive_mom_branch_label": "branches",
+        "NXP_top_growth_branch": "",
+        "NXP_top_growth_pct": "",
     }
 
     template_context = build_report_analysis("TEST ZONE", "Apr-26 to Jun-26", context).to_template_context()
@@ -240,7 +279,7 @@ def test_build_report_analysis_preserves_positive_and_negative_variance_language
     assert "positive mom variance" in template_context["SAV_summary_3"].lower()
     assert "negative mom variance" in template_context["CE_summary_1"].lower()
     assert "No branch recorded a negative MOM variance in the current month." in template_context["PBT_summary_3"]
-    assert "No branch recorded a negative variance." in template_context["AB_summary_1"]
+    assert "Agency Banking closed at" in template_context["AB_summary_1"]
 
 
 def test_build_report_analysis_uses_zero_aware_nxp_wording() -> None:
@@ -291,6 +330,8 @@ def test_build_report_analysis_uses_zero_aware_nxp_wording() -> None:
         "DP_top_budget_branch": "",
         "DP_top_budget_pct": "0",
         "DP_negative_ytd_branches": "",
+        "DP_positive_mom_branches": "",
+        "DP_positive_mom_branch_label": "branches",
         "TRA_value2": "0.00",
         "TRA_value3": "0.00",
         "TRA_value4": "0",
@@ -300,11 +341,15 @@ def test_build_report_analysis_uses_zero_aware_nxp_wording() -> None:
         "TRA_high_ldr_value": "0",
         "TRA_low_ldr_branch": "Low Branch",
         "TRA_low_ldr_value": "0",
+        "TRA_overutilized_branches": "",
+        "TRA_low_ldr_branches": "",
         "AB_value1": "0.00",
         "AB_value2": "0.00",
         "AB_value3_summary": "₦0",
         "AB_value3_summary_direction": "positive",
         "AB_negative_variance_branches": "",
+        "AB_decline_branches": "",
+        "AB_decline_branch_label": "branches",
         "AO_total_accounts": "0",
         "AO_value5": "0",
         "AO_value6": "0",
@@ -327,6 +372,7 @@ def test_build_report_analysis_uses_zero_aware_nxp_wording() -> None:
         "DMT_ACT_value1": "0",
         "DMT_ACT_value2": "0",
         "DMT_ACT_value3": "0",
+        "DMT_reactivation_label": "reactivated",
         "POS_value1": "0",
         "POS_value2": "0",
         "POS_value3": "0",
@@ -335,6 +381,10 @@ def test_build_report_analysis_uses_zero_aware_nxp_wording() -> None:
         "NXP_value3": "0.00",
         "NXP_value4_summary": "$0K",
         "NXP_value4_summary_direction": "positive",
+        "NXP_positive_mom_branches": "",
+        "NXP_positive_mom_branch_label": "branches",
+        "NXP_top_growth_branch": "",
+        "NXP_top_growth_pct": "",
     }
 
     template_context = build_report_analysis("TEST ZONE", "Apr-26 to Jun-26", context).to_template_context()

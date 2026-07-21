@@ -641,6 +641,107 @@ def _cards_low_issuance_branches(
     return branches
 
 
+def _positive_mom_growth_summary(
+    dataframe: pd.DataFrame,
+    previous_column: str,
+    current_column: str,
+) -> tuple[list[str], str, str]:
+    positive_branches: list[str] = []
+    standout_branch = ""
+    standout_growth = Decimal("0")
+
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        previous_value = parse_numeric(row.get(previous_column))
+        current_value = parse_numeric(row.get(current_column))
+        if not branch or previous_value is None or current_value is None:
+            continue
+        if current_value <= previous_value:
+            continue
+
+        positive_branches.append(branch)
+
+        if previous_value > 0:
+            growth = ((current_value - previous_value) / previous_value) * Decimal("100")
+            if growth > standout_growth:
+                standout_growth = growth
+                standout_branch = branch
+
+    standout_growth_text = f"{int(standout_growth):,}" if standout_growth > 0 else ""
+    return positive_branches, standout_branch, standout_growth_text
+
+
+def _branches_by_growth_direction(
+    dataframe: pd.DataFrame,
+    previous_column: str,
+    current_column: str,
+    direction: str,
+) -> list[str]:
+    branches: list[str] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        previous_value = parse_numeric(row.get(previous_column))
+        current_value = parse_numeric(row.get(current_column))
+        if not branch or previous_value is None or current_value is None:
+            continue
+        if direction == "positive" and current_value > previous_value:
+            branches.append(branch)
+        if direction == "negative" and current_value < previous_value:
+            branches.append(branch)
+    return branches
+
+
+def _branches_by_negative_value(
+    dataframe: pd.DataFrame,
+    column: str,
+) -> list[str]:
+    branches: list[str] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        value = parse_numeric(row.get(column))
+        if branch and value is not None and value < 0:
+            branches.append(branch)
+    return branches
+
+
+def _branches_above_threshold(
+    dataframe: pd.DataFrame,
+    column: str,
+    threshold: Decimal,
+    limit: int = 3,
+) -> list[tuple[str, Decimal]]:
+    items: list[tuple[str, Decimal]] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        value = parse_numeric(row.get(column))
+        if not branch or value is None:
+            continue
+        scaled = _ratio_percent(value)
+        if scaled > threshold:
+            items.append((branch, scaled))
+    items.sort(key=lambda item: item[1], reverse=True)
+    return items[:limit]
+
+
+def _branches_below_threshold(
+    dataframe: pd.DataFrame,
+    column: str,
+    threshold: Decimal,
+    limit: int = 3,
+) -> list[tuple[str, Decimal]]:
+    items: list[tuple[str, Decimal]] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        value = parse_numeric(row.get(column))
+        if not branch or value is None:
+            continue
+        scaled = _ratio_percent(value)
+        if scaled < threshold:
+            items.append((branch, scaled))
+    items.sort(key=lambda item: item[1])
+    return items[:limit]
+
+
 def _count_negative(dataframe: pd.DataFrame, column: str) -> int:
     count = 0
     for _, row in dataframe.iterrows():
@@ -697,6 +798,8 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
 
     tra_high = _branch_extreme(branch_rows, "TRA Loan to Dep", highest=True)
     tra_low = _branch_extreme(branch_rows, "TRA Loan to Dep", highest=False)
+    tra_overutilized = _branches_above_threshold(branch_rows, "TRA Loan to Dep", Decimal("150"))
+    tra_low_ldr = _branches_below_threshold(branch_rows, "TRA Loan to Dep", Decimal("20"))
 
     aob_active_branches = 0
     for _, branch_row in branch_rows.iterrows():
@@ -713,6 +816,13 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
     if cds_previous_issued != 0:
         cds_growth = ((cds_current_issued - cds_previous_issued) / cds_previous_issued) * Decimal("100")
     cds_low_branches = _cards_low_issuance_branches(branch_rows, "CDS2 No. of Cards Issued")
+    nxp_positive_branches, nxp_top_growth_branch, nxp_top_growth_pct = _positive_mom_growth_summary(
+        branch_rows,
+        "NXP Jun-25",
+        "NXP Jul-25",
+    )
+    dp_positive_mom_branches = _branches_by_growth_direction(branch_rows, "DP Jun-25", "DP Jul-25", "positive")
+    ab_decline_branches = _branches_by_negative_value(branch_rows, "AB VAR")
 
     return {
         "zone_branch_count": str(len(branch_names)),
@@ -738,6 +848,10 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
         "TRA_high_ldr_value": f"{_ratio_percent(tra_high[1]):,.0f}" if tra_high else "0",
         "TRA_low_ldr_branch": tra_low[0] if tra_low else "",
         "TRA_low_ldr_value": f"{_ratio_percent(tra_low[1]):,.0f}" if tra_low else "0",
+        "TRA_overutilized_branches": _join_readable([f"{branch} branch" for branch, _ in tra_overutilized]),
+        "TRA_low_ldr_branches": _join_readable(
+            [f"{branch} branch at {value:,.0f}%" for branch, value in tra_low_ldr]
+        ),
         "AO_total_accounts": f"{ao_total:,.0f}",
         "AO_unfunded_share": f"{ao_unfunded_share:,.0f}",
         "AO_low_branch": ao_low_branch[0] if ao_low_branch else "",
@@ -748,6 +862,17 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
         "CDS_growth_pct": f"{abs(cds_growth):,.0f}",
         "CDS_low_issuance_branches": _join_readable(cds_low_branches),
         "CDS_low_issuance_branch_label": "branch" if len(cds_low_branches) == 1 else "branches",
+        "DP_positive_mom_branches": _join_readable(dp_positive_mom_branches),
+        "DP_positive_mom_branch_label": "branch" if len(dp_positive_mom_branches) == 1 else "branches",
+        "AB_decline_branches": _join_readable(ab_decline_branches),
+        "AB_decline_branch_label": "branch" if len(ab_decline_branches) == 1 else "branches",
+        "NXP_positive_mom_branches": _join_readable(nxp_positive_branches),
+        "NXP_positive_mom_branch_label": "branch" if len(nxp_positive_branches) == 1 else "branches",
+        "NXP_top_growth_branch": nxp_top_growth_branch,
+        "NXP_top_growth_pct": nxp_top_growth_pct,
+        "DMT_reactivation_label": "only reactivated"
+        if (parse_numeric(zone_row.get("% Reactivated DMT_ACT")) or Decimal("0")) < Decimal("0.10")
+        else "reactivated",
     }
 
 
