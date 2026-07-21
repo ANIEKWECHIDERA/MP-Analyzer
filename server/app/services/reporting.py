@@ -399,6 +399,16 @@ def _format_reactivated_percentage(value: Decimal | None) -> str:
     return f"{numeric:.0f}"
 
 
+def _format_share_percentage(value: Decimal | None, total: Decimal | None) -> str:
+    if total in (None, Decimal("0")) or value is None or value <= 0:
+        return "0"
+
+    percentage = (value / total) * Decimal("100")
+    if percentage < Decimal("1"):
+        return "less than 1"
+    return f"{percentage:,.0f}"
+
+
 def _signed_value(display_value: str, currency: str) -> str:
     return f"{currency}{display_value}"
 
@@ -415,6 +425,20 @@ def _format_variance_text(value: Decimal | None, formatter: str) -> str:
     else:
         rendered = f"{absolute:,.2f}"
     return rendered
+
+
+def _summary_variance_direction(value: Decimal | None) -> str:
+    numeric = value or Decimal("0")
+    return "negative" if numeric < 0 else "positive"
+
+
+def _summary_variance_display(value: Decimal | None, formatter: str, currency: str) -> str:
+    numeric = value or Decimal("0")
+    plain = _format_variance_text(numeric, formatter)
+    display = f"{currency}{plain}"
+    if numeric < 0:
+        return f"({display})"
+    return display
 
 
 def _trend_rich_text(
@@ -581,15 +605,15 @@ def _negative_branch_entries(
     for branch, value in entries[:limit]:
         if formatter == "billions":
             rendered = format_billions(value)
-            output.append(f"{branch} ({_currency(rendered)})")
+            output.append(f"{branch} branch ({_currency(rendered)})")
         elif formatter == "dp":
             rendered = format_dp_millions(value)
-            output.append(f"{branch} ({_currency(rendered)})")
+            output.append(f"{branch} branch ({_currency(rendered)})")
         elif formatter == "millions":
             rendered = format_millions(value)
-            output.append(f"{branch} ({_currency(rendered)})")
+            output.append(f"{branch} branch ({_currency(rendered)})")
         else:
-            output.append(f"{branch} ({value:,.0f})")
+            output.append(f"{branch} branch ({value:,.0f})")
     return output
 
 
@@ -601,6 +625,121 @@ def _join_readable(items: list[str]) -> str:
     if len(items) == 2:
         return f"{items[0]} and {items[1]}"
     return f"{', '.join(items[:-1])}, and {items[-1]}"
+
+
+def _cards_low_issuance_branches(
+    dataframe: pd.DataFrame,
+    current_column: str,
+    threshold: Decimal = Decimal("100"),
+) -> list[str]:
+    branches: list[str] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        issued = parse_numeric(row.get(current_column)) or Decimal("0")
+        if branch and issued < threshold:
+            branches.append(branch)
+    return branches
+
+
+def _positive_mom_growth_summary(
+    dataframe: pd.DataFrame,
+    previous_column: str,
+    current_column: str,
+) -> tuple[list[str], str, str]:
+    positive_branches: list[str] = []
+    standout_branch = ""
+    standout_growth = Decimal("0")
+
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        previous_value = parse_numeric(row.get(previous_column))
+        current_value = parse_numeric(row.get(current_column))
+        if not branch or previous_value is None or current_value is None:
+            continue
+        if current_value <= previous_value:
+            continue
+
+        positive_branches.append(branch)
+
+        if previous_value > 0:
+            growth = ((current_value - previous_value) / previous_value) * Decimal("100")
+            if growth > standout_growth:
+                standout_growth = growth
+                standout_branch = branch
+
+    standout_growth_text = f"{int(standout_growth):,}" if standout_growth > 0 else ""
+    return positive_branches, standout_branch, standout_growth_text
+
+
+def _branches_by_growth_direction(
+    dataframe: pd.DataFrame,
+    previous_column: str,
+    current_column: str,
+    direction: str,
+) -> list[str]:
+    branches: list[str] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        previous_value = parse_numeric(row.get(previous_column))
+        current_value = parse_numeric(row.get(current_column))
+        if not branch or previous_value is None or current_value is None:
+            continue
+        if direction == "positive" and current_value > previous_value:
+            branches.append(branch)
+        if direction == "negative" and current_value < previous_value:
+            branches.append(branch)
+    return branches
+
+
+def _branches_by_negative_value(
+    dataframe: pd.DataFrame,
+    column: str,
+) -> list[str]:
+    branches: list[str] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        value = parse_numeric(row.get(column))
+        if branch and value is not None and value < 0:
+            branches.append(branch)
+    return branches
+
+
+def _branches_above_threshold(
+    dataframe: pd.DataFrame,
+    column: str,
+    threshold: Decimal,
+    limit: int = 3,
+) -> list[tuple[str, Decimal]]:
+    items: list[tuple[str, Decimal]] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        value = parse_numeric(row.get(column))
+        if not branch or value is None:
+            continue
+        scaled = _ratio_percent(value)
+        if scaled > threshold:
+            items.append((branch, scaled))
+    items.sort(key=lambda item: item[1], reverse=True)
+    return items[:limit]
+
+
+def _branches_below_threshold(
+    dataframe: pd.DataFrame,
+    column: str,
+    threshold: Decimal,
+    limit: int = 3,
+) -> list[tuple[str, Decimal]]:
+    items: list[tuple[str, Decimal]] = []
+    for _, row in dataframe.iterrows():
+        branch = normalize_text(row.get("BRANCHES"))
+        value = parse_numeric(row.get(column))
+        if not branch or value is None:
+            continue
+        scaled = _ratio_percent(value)
+        if scaled < threshold:
+            items.append((branch, scaled))
+    items.sort(key=lambda item: item[1])
+    return items[:limit]
 
 
 def _count_negative(dataframe: pd.DataFrame, column: str) -> int:
@@ -659,6 +798,8 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
 
     tra_high = _branch_extreme(branch_rows, "TRA Loan to Dep", highest=True)
     tra_low = _branch_extreme(branch_rows, "TRA Loan to Dep", highest=False)
+    tra_overutilized = _branches_above_threshold(branch_rows, "TRA Loan to Dep", Decimal("150"))
+    tra_low_ldr = _branches_below_threshold(branch_rows, "TRA Loan to Dep", Decimal("20"))
 
     aob_active_branches = 0
     for _, branch_row in branch_rows.iterrows():
@@ -669,6 +810,19 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
     sav_top = _branch_budget_achievement(branch_rows, "SAV Jul-25", "SAV 2025 FULL YR BGT")
     fd_top = _branch_budget_achievement(branch_rows, "FD Jul-25", "FD 2025 FULL YR BGT")
     dp_top = _branch_budget_achievement(branch_rows, "DP Jul-25", "DP 2025 FULL YR BGT")
+    cds_previous_issued = parse_numeric(zone_row.get("CDS1 No. of Cards Issued")) or Decimal("0")
+    cds_current_issued = parse_numeric(zone_row.get("CDS2 No. of Cards Issued")) or Decimal("0")
+    cds_growth = Decimal("0")
+    if cds_previous_issued != 0:
+        cds_growth = ((cds_current_issued - cds_previous_issued) / cds_previous_issued) * Decimal("100")
+    cds_low_branches = _cards_low_issuance_branches(branch_rows, "CDS2 No. of Cards Issued")
+    nxp_positive_branches, nxp_top_growth_branch, nxp_top_growth_pct = _positive_mom_growth_summary(
+        branch_rows,
+        "NXP Jun-25",
+        "NXP Jul-25",
+    )
+    dp_positive_mom_branches = _branches_by_growth_direction(branch_rows, "DP Jun-25", "DP Jul-25", "positive")
+    ab_decline_branches = _branches_by_negative_value(branch_rows, "AB VAR")
 
     return {
         "zone_branch_count": str(len(branch_names)),
@@ -694,11 +848,31 @@ def _additional_narrative_context(zone_name: str, zone_row: pd.Series, branch_ro
         "TRA_high_ldr_value": f"{_ratio_percent(tra_high[1]):,.0f}" if tra_high else "0",
         "TRA_low_ldr_branch": tra_low[0] if tra_low else "",
         "TRA_low_ldr_value": f"{_ratio_percent(tra_low[1]):,.0f}" if tra_low else "0",
+        "TRA_overutilized_branches": _join_readable([f"{branch} branch" for branch, _ in tra_overutilized]),
+        "TRA_low_ldr_branches": _join_readable(
+            [f"{branch} branch at {value:,.0f}%" for branch, value in tra_low_ldr]
+        ),
         "AO_total_accounts": f"{ao_total:,.0f}",
         "AO_unfunded_share": f"{ao_unfunded_share:,.0f}",
         "AO_low_branch": ao_low_branch[0] if ao_low_branch else "",
         "AO_low_branch_total": f"{ao_low_branch[1]:,.0f}" if ao_low_branch else "0",
         "AOB_active_branch_count": str(aob_active_branches),
+        "CDS_previous_issued": f"{cds_previous_issued:,.0f}",
+        "CDS_current_issued": f"{cds_current_issued:,.0f}",
+        "CDS_growth_pct": f"{abs(cds_growth):,.0f}",
+        "CDS_low_issuance_branches": _join_readable(cds_low_branches),
+        "CDS_low_issuance_branch_label": "branch" if len(cds_low_branches) == 1 else "branches",
+        "DP_positive_mom_branches": _join_readable(dp_positive_mom_branches),
+        "DP_positive_mom_branch_label": "branch" if len(dp_positive_mom_branches) == 1 else "branches",
+        "AB_decline_branches": _join_readable(ab_decline_branches),
+        "AB_decline_branch_label": "branch" if len(ab_decline_branches) == 1 else "branches",
+        "NXP_positive_mom_branches": _join_readable(nxp_positive_branches),
+        "NXP_positive_mom_branch_label": "branch" if len(nxp_positive_branches) == 1 else "branches",
+        "NXP_top_growth_branch": nxp_top_growth_branch,
+        "NXP_top_growth_pct": nxp_top_growth_pct,
+        "DMT_reactivation_label": "only reactivated"
+        if (parse_numeric(zone_row.get("% Reactivated DMT_ACT")) or Decimal("0")) < Decimal("0.10")
+        else "reactivated",
     }
 
 
@@ -723,9 +897,7 @@ def _branch_metrics(zone_name: str, dataframe: pd.DataFrame) -> dict[str, str]:
     def share(row: pd.Series, column: str) -> str:
         total = parse_numeric(zone_data[column].sum())
         value = parse_numeric(row[column])
-        if total in (None, Decimal("0")) or value is None:
-            return "0"
-        return f"{(value / total * Decimal('100')):,.0f}"
+        return _format_share_percentage(value, total)
 
     def variance_value(row: pd.Series, column: str) -> str:
         value = parse_numeric(row[column]) or Decimal("0")
@@ -848,6 +1020,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "PBT_value3": f"{((pbt_achieved / pbt_budget) * Decimal('100')):,.0f}" if pbt_budget else "0",
         "PBT_value4": _format_variance_text(value("PBT 2025 YOY VAR"), "billions"),
         "PBT_value4_r": _variance_rich_text(value("PBT 2025 YOY VAR"), "billions", "₦"),
+        "PBT_value4_summary": _summary_variance_display(value("PBT 2025 YOY VAR"), "billions", "₦"),
+        "PBT_value4_summary_direction": _summary_variance_direction(value("PBT 2025 YOY VAR")),
         "PBT_value5": _signed_value(format_billions(value("PBT Exp Run Rate")), "₦"),
         "PBT_value6": _format_ratio_percentage(value("PBT Cost to Income Ratio")),
         "PBT_summary": "Insert PBT Summary Here",
@@ -859,6 +1033,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "DDA_value4": f"{((dda_current / dda_budget) * Decimal('100')):,.0f}" if dda_budget else "0",
         "DDA_value5": _format_variance_text(value("DDA YTD Variance"), "billions"),
         "DDA_value5_r": _variance_rich_text(value("DDA YTD Variance"), "billions", "₦"),
+        "DDA_value5_summary": _summary_variance_display(value("DDA YTD Variance"), "billions", "₦"),
+        "DDA_value5_summary_direction": _summary_variance_direction(value("DDA YTD Variance")),
         "DDA_summary": "Insert DDA Summary Here",
         "SAV_value1": _signed_value(format_billions(value("SAV May-25")), "₦"),
         "SAV_value2": _signed_value(format_billions(value("SAV Jun-25")), "₦"),
@@ -868,6 +1044,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "SAV_value4": f"{((sav_current / sav_budget) * Decimal('100')):,.0f}" if sav_budget else "0",
         "SAV_value5": _format_variance_text(value("SAV YTD Variance"), "billions"),
         "SAV_value5_r": _variance_rich_text(value("SAV YTD Variance"), "billions", "₦"),
+        "SAV_value5_summary": _summary_variance_display(value("SAV YTD Variance"), "billions", "₦"),
+        "SAV_value5_summary_direction": _summary_variance_direction(value("SAV YTD Variance")),
         "SAV_summary": "Insert SAV Summary Here",
         "FD_value1": _signed_value(format_billions(value("FD May-25")), "₦"),
         "FD_value2": _signed_value(format_billions(value("FD Jun-25")), "₦"),
@@ -877,6 +1055,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "FD_value4": f"{((fd_current / fd_budget) * Decimal('100')):,.0f}" if fd_budget else "0",
         "FD_value5": _format_variance_text(value("FD YTD Variance"), "billions"),
         "FD_value5_r": _variance_rich_text(value("FD YTD Variance"), "billions", "₦"),
+        "FD_value5_summary": _summary_variance_display(value("FD YTD Variance"), "billions", "₦"),
+        "FD_value5_summary_direction": _summary_variance_direction(value("FD YTD Variance")),
         "FD_summary": "Insert FD Summary Here",
         "DP_value1": _signed_value(format_dp_millions(value("DP May-25")), "$"),
         "DP_value2": _signed_value(format_dp_millions(value("DP Jun-25")), "$"),
@@ -886,6 +1066,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "DP_value4": f"{((dp_current / dp_budget) * Decimal('100')):,.0f}" if dp_budget else "0",
         "DP_value5": _format_variance_text(value("DP YTD Variance"), "dp"),
         "DP_value5_r": _variance_rich_text(value("DP YTD Variance"), "dp", "$"),
+        "DP_value5_summary": _summary_variance_display(value("DP YTD Variance"), "dp", "$"),
+        "DP_value5_summary_direction": _summary_variance_direction(value("DP YTD Variance")),
         "DP_summary": "Insert DP Summary Here",
         "TRA_value1": _signed_value(format_billions(value("TRA May-25")), "₦"),
         "TRA_value2": _signed_value(format_billions(value("TRA Jun-25")), "₦"),
@@ -895,12 +1077,16 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "TRA_value4": f"{_ratio_percent(tra_ratio):,.0f}",
         "TRA_value5": _format_variance_text(value("TRA YTD Variance"), "billions"),
         "TRA_value5_r": _variance_rich_text(value("TRA YTD Variance"), "billions", "₦"),
+        "TRA_value5_summary": _summary_variance_display(value("TRA YTD Variance"), "billions", "₦"),
+        "TRA_value5_summary_direction": _summary_variance_direction(value("TRA YTD Variance")),
         "TRA_summary": f"The Zone recorded a loan to Deposit Ratio of {format_percentage(tra_ratio)}% in the current period",
         "AB_value1": _signed_value(format_millions(value("AB Jun-25")), "₦"),
         "AB_value2": _signed_value(format_millions(value("AB Jul-25")), "₦"),
         "AB_value2_r": _trend_rich_text(format_millions(value("AB Jul-25")), value("AB Jun-25"), value("AB Jul-25"), "₦"),
         "AB_value3": _format_variance_text(value("AB VAR"), "millions"),
         "AB_value3_r": _variance_rich_text(value("AB VAR"), "millions", "₦"),
+        "AB_value3_summary": _summary_variance_display(value("AB VAR"), "millions", "₦"),
+        "AB_value3_summary_direction": _summary_variance_direction(value("AB VAR")),
         "AB_summary": "Insert AB Summary Here",
         "AO_value1": f"{value('AO C/A Opened - Funded'):,.0f}",
         "AO_value2": f"{value('AO S/A Opened - Funded'):,.0f}",
@@ -932,6 +1118,8 @@ def _build_context(zone_name: str, parsed: ParsedWorkbook) -> dict[str, object]:
         "NXP_value3_r": _trend_rich_text(_format_zero_safe_millions(value("NXP Jul-25")), value("NXP Jun-25"), value("NXP Jul-25"), "$"),
         "NXP_value4": _format_variance_text(value("NXP YOY VAR"), "millions"),
         "NXP_value4_r": _variance_rich_text(value("NXP YOY VAR"), "millions", "$"),
+        "NXP_value4_summary": _summary_variance_display(value("NXP YOY VAR"), "millions", "$"),
+        "NXP_value4_summary_direction": _summary_variance_direction(value("NXP YOY VAR")),
         "DMT_ACT_value1": f"{value('TOTAL_DMT_ACT'):,.0f}",
         "DMT_ACT_value2": f"{value('No. Reactivated DMT_ACT'):,.0f}",
         "DMT_ACT_value3": _format_reactivated_percentage(value("% Reactivated DMT_ACT")),

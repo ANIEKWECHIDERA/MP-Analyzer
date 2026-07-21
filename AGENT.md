@@ -1432,3 +1432,177 @@ This document was produced by following these inspection steps:
   - direct parse of `JUNE'26 ZONAL DISTRIBUTION FOR BRANCHES.xlsx` now returns:
     - `Apr-26 to Jun-26`
   - `..\.venv\Scripts\python.exe -m pytest tests/test_upload_parser.py tests/test_reporting.py tests/test_analysis_narratives.py` -> `21 passed`
+
+
+## 2026-07-21 Contribution Percentage Tightening Pass
+- Tightened branch contribution wording so very small positive shares no longer read like `0%` or noisy fractional percentages.
+- Updated `server/app/services/reporting.py`:
+  - added `_format_share_percentage()`
+  - true zero contribution still renders as `0`
+  - any positive contribution below `1%` now renders as `less than 1`
+  - all existing branch share fields now flow through that shared formatter
+- This keeps the existing template wording natural, so places that already append `%` will now read as:
+  - `less than 1%`
+- Added regression coverage in `server/tests/test_reporting.py` for:
+  - tiny positive share -> `less than 1`
+  - zero share -> `0`
+  - ordinary share -> rounded whole percentage text
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py tests/test_upload_parser.py` -> `22 passed`
+
+
+## 2026-07-21 Summary Variance Language And Structure Upload Review Pass
+- Tightened summary variance language across the report engine so headline variance sentences now explicitly state whether the variance is positive or negative.
+- Updated `server/app/services/reporting.py` with summary-only variance helpers:
+  - `_summary_variance_direction()`
+  - `_summary_variance_display()`
+- Summary behavior now differs intentionally from the table behavior:
+  - tables keep red/green sign signaling without parentheses
+  - summaries render negative variance values in plain black text with parentheses, for example `(₦268.36M)`
+- Updated `server/app/analysis/narratives.py` so summary wording now reads more directly, for example:
+  - `closed the period under review`
+  - `YOY negative variance of (...)`
+  - `negative variance pressure came from ...`
+- Tightened branch naming in negative-variance lists so entries now render with the `branch` suffix, for example:
+  - `Benin branch (₦1.21B)`
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py tests/test_analysis_narratives.py tests/test_upload_parser.py` -> `22 passed`
+  - `npm run build` in `client/` -> passed
+
+
+## 2026-07-21 Structure Builder Upload Review Revert
+- Reverted the temporary structure-builder UI change that added an edit/review step to the direct structure upload flow.
+- Restored the prior behavior in `client/src/pages/StructureBuilderPage.tsx`:
+  - direct structure uploads once again replace the active structure file immediately
+  - the existing report-based structure preview/editor flow remains unchanged
+- The summary-variance tightening work from the same pass remains intact.
+- Verification:
+  - `npm run build` in `client/` -> passed
+
+
+## 2026-07-21 Cards Narrative Tightening Pass
+- Updated the cards narrative in `server/app/analysis/narratives.py` to follow the new exact sentence pattern requested by the user:
+  - current-month cards issued
+  - percentage growth from the previous period
+  - previous-month cards issued with year
+  - active cards count
+  - inactive cards count
+  - explicit low-issuance branch callout for branches that issued fewer than 100 cards in the current period
+- Added cards-specific narrative context in `server/app/services/reporting.py`:
+  - `CDS_previous_issued`
+  - `CDS_current_issued`
+  - `CDS_growth_pct`
+  - `CDS_low_issuance_branches`
+  - `CDS_low_issuance_branch_label`
+- Current-period low-issuance branches are derived from branch rows using `CDS2 No. of Cards Issued`, which the current manual structure workflow treats as the latest card-issuance month.
+- Confirmed current structure-builder behavior remains:
+  - direct uploaded structure files are not editable after upload
+  - editable review is still available only in the `Build From Current Report` preview/editor flow
+
+
+## 2026-07-21 Direct Structure Review Revert
+- Reverted the temporary direct-upload review pass for prepared structure files.
+- Restored the prior behavior:
+  - `Upload Prepared Structure File` now replaces the active structure immediately again
+  - no separate editable review step runs for direct structure uploads
+- `Build From Current Report` remains the only editable structure-review flow.
+
+
+## 2026-07-21 NXP Zero-Case Narrative Tightening
+- Tightened the NXP narrative in `server/app/analysis/narratives.py` for fully flat zero cases.
+- New behavior:
+  - when previous-month NXP, current-month NXP, and YOY variance are all zero, the report no longer says:
+    - `NXP closed at $0.00 in June, from $0.00 in May, while the year-on-year variance closed at $0K.`
+  - it now reads more naturally:
+    - `NXP remained flat at $0.00 in June and May, with no year-on-year variance recorded.`
+- Added regression coverage in `server/tests/test_analysis_narratives.py`.
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py` -> `3 passed`
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py` -> `14 passed`
+
+
+## 2026-07-21 Broader Zero-Case Narrative Tightening
+- Extended the flat-zero narrative tightening in `server/app/analysis/narratives.py` beyond NXP.
+- Added clearer zero-activity wording for:
+  - Domiciliary Deposits
+  - Agency Banking
+  - Channels Enrolled
+  - Agents Onboarded
+  - Dormant Account Reactivation
+  - POS
+- Example behavior:
+  - flat zero monetary lines now say `remained flat ... with no ... variance recorded`
+  - zero operational activity lines now say `No ... activity was recorded`
+- Added regression coverage in `server/tests/test_analysis_narratives.py` for all of the above zero-case summaries.
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py` -> `3 passed`
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py` -> `14 passed`
+
+
+## 2026-07-21 NXP Reference-Language Pass
+- Inspected `C:\Users\Chidera Aniekwe\Documents\JUNE 2026 MPR REVIEW FORMAT.docx` and extracted the reference NXP line:
+  - `Creek Road and Warehouse Rd 2 branches are commended for recorded a positive MOM variance in this parameter, especially Warehouse Rd 2 branch that recorded a growth of over 850% in this parameter.`
+- Updated `server/app/services/reporting.py` to derive NXP branch-level MOM-growth narrative inputs from workbook branch rows:
+  - `NXP_positive_mom_branches`
+  - `NXP_positive_mom_branch_label`
+  - `NXP_top_growth_branch`
+  - `NXP_top_growth_pct`
+- Updated `server/app/analysis/narratives.py` so the non-zero NXP summary now prefers the reference-style commendation wording when branches recorded positive MOM growth, instead of restating the table figures.
+- Kept the previously added zero-case fallback intact for flat-zero NXP periods.
+- Added regression coverage in `server/tests/test_analysis_narratives.py` for:
+  - the commendation-style positive-MOM branch wording
+  - the existing zero-case wording
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py` -> `3 passed`
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py` -> `14 passed`
+
+
+## 2026-07-21 DP AB POS Reference-Language Pass
+- Inspected `C:\Users\Chidera Aniekwe\Documents\JUNE 2026 MPR REVIEW FORMAT.docx` for additional section wording patterns covering:
+  - Domiciliary Deposits
+  - Agency Banking
+  - POS
+- Updated `server/app/services/reporting.py` to derive extra branch-level narrative context for:
+  - positive Domiciliary Deposit MOM movers
+  - Agency Banking decline branches
+- Updated `server/app/analysis/narratives.py` so:
+  - Domiciliary Deposits can now use a more reference-style line such as:
+    - `The zone recorded a positive YTD variance ... despite the negative performance of ...`
+    - plus a supporting positive MOM improvement sentence when applicable
+  - Agency Banking now prefers the tighter branch-led wording:
+    - `... branches recorded a decline in agency banking transaction value in <month>.`
+  - POS now follows the tighter reference style:
+    - `POS: The zone recorded a total of ...`
+    - retrieved terminals are omitted from the sentence when they are zero
+- Preserved the zero-case tightening rules already added in the previous pass.
+- Rebuilt `server/tests/test_analysis_narratives.py` to lock in:
+  - reference-style DP wording
+  - reference-style Agency Banking wording
+  - tighter POS wording
+  - the previously added NXP and zero-case behavior
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py` -> `3 passed`
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py` -> `14 passed`
+
+
+## 2026-07-21 TRA DMT Reference-Language Pass
+- Inspected the June 2026 reference report for:
+  - Total Risk Assets / LDR wording
+  - Dormant Account wording
+- Updated `server/app/services/reporting.py` to derive additional narrative context for:
+  - branches with LDR above 150%
+  - branches with very low LDR values
+  - Dormant Account wording mode based on reactivation level
+- Updated `server/app/analysis/narratives.py` so:
+  - `TRA` now mirrors the reference report more closely with:
+    - overutilization wording for branches above 150% LDR
+    - low-LDR encouragement wording for weak branches
+    - fallback wording when those threshold scenarios are not present
+  - `DMT_ACT` now mirrors the reference style more closely with:
+    - `only reactivated ... and they are admonished to do better`
+    - explicit zero-case fallback when no dormant-account activity exists
+    - explicit no-dormant-accounts fallback when the zone has none recorded
+- Updated `server/tests/test_analysis_narratives.py` to lock in the new TRA and DMT narrative behavior.
+- Verification:
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_analysis_narratives.py` -> `3 passed`
+  - `..\.venv\Scripts\python.exe -m pytest tests/test_reporting.py` -> `14 passed`
